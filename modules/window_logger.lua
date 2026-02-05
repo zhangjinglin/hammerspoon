@@ -11,6 +11,22 @@ local titleStartTime = 0        -- 子标题开始的时间
 
 local THRESHOLD = 60            -- 总时长超过 30 秒才记录
 
+local function formatDuration(totalSeconds)
+    local s = totalSeconds or 0
+    local days = math.floor(s / 86400)
+    local hrs = math.floor((s % 86400) / 3600)
+    local mins = math.floor((s % 3600) / 60)
+    local secs = s % 60
+
+    local res = ""
+    if days > 0 then res = res .. days .. "天" end
+    if hrs > 0 or days > 0 then res = res .. string.format("%d小时", hrs) end
+    if mins > 0 or hrs > 0 or days > 0 then res = res .. string.format("%02d分钟", mins) end
+    res = res .. string.format("%02d秒", secs)
+    
+    return res
+end
+
 function winLogger.init()
     -- 初始化第一个窗口的状态
     local firstWin = hs.window.focusedWindow()
@@ -61,7 +77,7 @@ function winLogger.writeGroupedLog()
     local filePath = config.obsidian_daily_path .. fileName
     
     -- 构造写入内容
-    local content = string.format("\n\n---\n> [!tip] [专注记录] %s (总计 %d 秒)", currentApp, totalAppDuration)
+    local content = string.format("\n\n---\n> [!tip] [专注记录] %s (总计 %s)", currentApp, formatDuration(totalAppDuration))
     
     -- 将子条目按时长排序（可选）并转为无序列表
     for title, duration in pairs(subEntries) do
