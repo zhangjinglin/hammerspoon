@@ -12,6 +12,13 @@ local screenshotTimer = nil     -- 定时器对象，必须保存到变量中防
 
 local THRESHOLD = 60            -- 总时长超过 30 秒才记录
 
+-- 检查当前时间是否在禁止日志的时间段内 (23:00 - 7:00 AM)
+local function isLoggingDisabled()
+    local hour = tonumber(os.date("%H"))
+    -- 23 到 23:59 或 0 到 6:59 之间不记录
+    return hour >= 23 or hour < 7
+end
+
 local function formatDuration(totalSeconds)
     local s = totalSeconds or 0
     local days = math.floor(s / 86400)
@@ -44,6 +51,11 @@ function winLogger.init()
 
     hs.window.filter.default:subscribe(hs.window.filter.windowFocused, function(win)
         if not win then return end
+        
+        -- 在禁止时段禁用日志
+        if isLoggingDisabled() then
+            return
+        end
         
         local now = hs.timer.absoluteTime()
         local segmentDuration = math.floor((now - titleStartTime) / 1e9)
@@ -78,6 +90,11 @@ function winLogger.init()
 end
 
 function winLogger.captureAndLogScreenshot()
+    -- 在禁止时段禁用日志
+    if isLoggingDisabled() then
+        return
+    end
+    
     local todayDate = os.date(config.date_format)
     local dailyFolder = config.obsidian_daily_path
     local imagesFolder = dailyFolder .. "images/"
