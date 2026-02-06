@@ -15,8 +15,8 @@ function clipboard.init()
         local flags = event:getFlags()
         local keyCode = event:getKeyCode()
 
-        -- 55 是左 Command 键的 KeyCode
-        if keyCode == 55 and flags.cmd then
+        -- 55 是左 Command 键，54 是右 Command 键的 KeyCode
+        if (keyCode == 55 or keyCode == 54) and flags.cmd then
             local now = hs.timer.absoluteTime() / 1e9 -- 转为秒
             local diff = now - lastCmdTime
             

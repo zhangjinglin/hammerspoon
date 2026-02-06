@@ -31,7 +31,7 @@ end
 function winLogger.init()
     -- [新增] 启动每 5 秒截图定时器
     -- 必须保存到变量中，否则会被垃圾回收
-    screenshotTimer = hs.timer.doEvery(300, winLogger.captureAndLogScreenshot)
+    screenshotTimer = hs.timer.doEvery(900, winLogger.captureAndLogScreenshot)
 
     -- 初始化第一个窗口的状态
     local firstWin = hs.window.focusedWindow()
@@ -97,7 +97,7 @@ function winLogger.captureAndLogScreenshot()
     
     -- 3. 保存图片
     local timeStr = os.date("%H-%M-%S")
-    local imgName = "screenshot-" .. timeStr .. ".jpg"
+    local imgName = "screenshot-" .. todayDate .. "-" .. timeStr .. ".jpg"
     local fullPath = imagesFolder .. imgName
     
     -- saveToFile(path, filetype) -> boolean

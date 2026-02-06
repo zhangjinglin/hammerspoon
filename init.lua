@@ -28,7 +28,7 @@ utils.autoReload()
 winLogger.init()
 
 -- 3. 初始化鼠标手势模块
-gestures.init()
+-- gestures.init()
 
 -- 4. 初始化 Finder Plus 模块
 -- finder.init()
