@@ -8,6 +8,7 @@ local totalAppDuration = 0      -- 整个 App 会话的总时长
 local subEntries = {}           -- 存放 App 内部切换的标题及对应时长
 local currentTitle = ""         -- 当前正在计时的子标题
 local titleStartTime = 0        -- 子标题开始的时间
+local screenshotTimer = nil     -- 定时器对象，必须保存到变量中防止被垃圾回收
 
 local THRESHOLD = 60            -- 总时长超过 30 秒才记录
 
@@ -28,6 +29,10 @@ local function formatDuration(totalSeconds)
 end
 
 function winLogger.init()
+    -- [新增] 启动每 5 秒截图定时器
+    -- 必须保存到变量中，否则会被垃圾回收
+    screenshotTimer = hs.timer.doEvery(300, winLogger.captureAndLogScreenshot)
+
     -- 初始化第一个窗口的状态
     local firstWin = hs.window.focusedWindow()
     if firstWin then
@@ -72,6 +77,49 @@ function winLogger.init()
     end)
 end
 
+function winLogger.captureAndLogScreenshot()
+    local todayDate = os.date(config.date_format)
+    local dailyFolder = config.obsidian_daily_path
+    local imagesFolder = dailyFolder .. "images/"
+
+    print("captureAndLogScreenshot")
+    
+    -- 1. 确保存放图片的文件夹存在
+    -- mkdir -p 可以递归创建目录，如果已存在也不会报错
+    os.execute("mkdir -p '" .. imagesFolder .. "'")
+    
+    -- 2. 截图
+    local screen = hs.screen.mainScreen()
+    if not screen then return end
+    
+    local image = screen:snapshot()
+    if not image then return end
+    
+    -- 3. 保存图片
+    local timeStr = os.date("%H-%M-%S")
+    local imgName = "screenshot-" .. timeStr .. ".jpg"
+    local fullPath = imagesFolder .. imgName
+    
+    -- saveToFile(path, filetype) -> boolean
+    -- filetype: BMP, GIF, JPEG, PDF, PNG, TIFF
+    image:saveToFile(fullPath, "JPEG")
+    
+    -- 4. 写入日记文件
+    local logFile = dailyFolder .. todayDate .. ".md"
+    local file = io.open(logFile, "a")
+    if file then
+        -- 相对路径引用，让 Obsidian 能直接识别
+        -- 格式：![screenshot-10-00-00.jpg](images/screenshot-10-00-00.jpg)
+        local mdLink = string.format("\n\n---\n> [!example] 📸 屏幕快照 %s\n> ![[%s]]\n", timeStr, imgName)
+        
+        -- 如果你想用标准 Markdown 链接：
+        -- local mdLink = string.format("\n\n![Snapshot %s](images/%s)\n", timeStr, imgName)
+        
+        file:write(mdLink)
+        file:close()
+    end
+end
+
 function winLogger.writeGroupedLog()
     local fileName = os.date(config.date_format) .. ".md"
     local filePath = config.obsidian_daily_path .. fileName
@@ -80,6 +128,7 @@ function winLogger.writeGroupedLog()
     local content = string.format("\n\n---\n> [!tip] [专注记录] %s (总计 %s)", currentApp, formatDuration(totalAppDuration))
     
     -- 将子条目按时长排序（可选）并转为无序列表
+    -- 简单的遍历是无序的，如果需要排序可以先提取 keys
     for title, duration in pairs(subEntries) do
         if duration > 2 then -- 过滤掉极其短暂的闪过（比如切换时路过的标题）
             content = content .. string.format("\n> - `%d秒` | %s", duration, title)
