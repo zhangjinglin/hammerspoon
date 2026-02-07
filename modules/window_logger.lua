@@ -9,6 +9,7 @@ local subEntries = {}           -- 存放 App 内部切换的标题及对应时�
 local currentTitle = ""         -- 当前正在计时的子标题
 local titleStartTime = 0        -- 子标题开始的时间
 local screenshotTimer = nil     -- 定时器对象，必须保存到变量中防止被垃圾回收
+local currentWin = nil          -- 当前正在追踪的窗口对象（用于截图）
 
 local THRESHOLD = 60            -- 总时长超过 30 秒才记录
 
@@ -38,13 +39,13 @@ end
 function winLogger.init()
     -- [新增] 启动每 5 秒截图定时器
     -- 必须保存到变量中，否则会被垃圾回收
-    screenshotTimer = hs.timer.doEvery(900, winLogger.captureAndLogScreenshot)
+    -- screenshotTimer = hs.timer.doEvery(900, winLogger.captureAndLogScreenshot)
 
-    -- 初始化第一个窗口的状态
-    local firstWin = hs.window.focusedWindow()
-    if firstWin then
-        currentApp = firstWin:application():title()
-        currentTitle = firstWin:title()
+    -- 初始化第一个窗口的状态（保存为 currentWin，供后续截图使用）
+    currentWin = hs.window.focusedWindow()
+    if currentWin then
+        currentApp = currentWin:application():title()
+        currentTitle = currentWin:title()
         titleStartTime = hs.timer.absoluteTime()
         startTime = titleStartTime
     end
@@ -86,6 +87,10 @@ function winLogger.init()
         -- 3. 更新子标题状态
         currentTitle = newTitle
         titleStartTime = now
+
+        -- 更新 currentWin 为新聚焦的窗口（注意：不要在判断 app 切换并写入日志之前覆盖它，
+        -- 以便 writeGroupedLog 能拿到上一个 app 的窗口用于截图）
+        currentWin = win
     end)
 end
 
@@ -99,7 +104,7 @@ function winLogger.captureAndLogScreenshot()
     local dailyFolder = config.obsidian_daily_path
     local imagesFolder = dailyFolder .. "images/"
 
-    print("captureAndLogScreenshot")
+    -- print("captureAndLogScreenshot")
     
     -- 1. 确保存放图片的文件夹存在
     -- mkdir -p 可以递归创建目录，如果已存在也不会报错
@@ -140,9 +145,25 @@ end
 function winLogger.writeGroupedLog()
     local fileName = os.date(config.date_format) .. ".md"
     local filePath = config.obsidian_daily_path .. fileName
+
+    -- print("Writing grouped log for app: " .. currentApp)
     
+    -- 获取当前应用的截图（使用 currentWin 窗口对象）
+    local appScreenshot = nil
+    local screenshotName = nil
+    if currentWin then
+        appScreenshot = currentWin:snapshot()
+    end
+    if appScreenshot then
+        local imagesFolder = config.obsidian_daily_path .. "images/"
+        os.execute("mkdir -p '" .. imagesFolder .. "'")
+        screenshotName = os.date(config.date_format) .. "-" .. os.date("%H-%M-%S") .. "-" .. currentApp .. ".jpg"
+        local screenshotPath = imagesFolder .. screenshotName
+        appScreenshot:saveToFile(screenshotPath, "JPEG")    
+        -- print("Saved app screenshot to: " .. screenshotPath)
+    end
     -- 构造写入内容
-    local content = string.format("\n\n---\n> [!tip] [专注记录] %s (总计 %s)", currentApp, formatDuration(totalAppDuration))
+    local content = string.format("\n\n---\n> [!tip] [专注记录] %s (总计 %s) \n> ![[%s]]", currentApp, formatDuration(totalAppDuration), screenshotName or "")
     
     -- 将子条目按时长排序（可选）并转为无序列表
     -- 简单的遍历是无序的，如果需要排序可以先提取 keys
