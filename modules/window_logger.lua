@@ -163,7 +163,7 @@ function winLogger.writeGroupedLog()
         -- print("Saved app screenshot to: " .. screenshotPath)
     end
     -- 构造写入内容
-    local content = string.format("\n\n---\n> [!tip] [专注记录] %s (总计 %s) \n> ![[%s]]", currentApp, formatDuration(totalAppDuration), screenshotName or "")
+    local content = string.format("\n\n---\n> [!tip] [专注记录] %s " .. os.date("(%H:%M)") .. "(总计 %s) \n> ![[%s]]", currentApp, formatDuration(totalAppDuration), screenshotName or "")
     
     -- 将子条目按时长排序（可选）并转为无序列表
     -- 简单的遍历是无序的，如果需要排序可以先提取 keys

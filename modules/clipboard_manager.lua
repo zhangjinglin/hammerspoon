@@ -84,7 +84,7 @@ function clipboard.appendToObsidian()
         if not text or text == "" then return end
 
         -- 替换掉文本里面的回车
-        text = text:gsub("\n", " ")
+        text = formatForCallout(text)
         
         local fileName = os.date(config.date_format) .. ".md"
         local filePath = config.obsidian_daily_path .. fileName
@@ -92,7 +92,7 @@ function clipboard.appendToObsidian()
         -- 3. 检查文件是否存在并写入
         local file = io.open(filePath, "a") -- "a" 代表 append 追加模式
         if file then
-            file:write("\n\n---\n> [!NOTE] 快速采集\n> " .. text .. "\n")
+            file:write("\n\n---\n> [!NOTE] 快速采集 " .. os.date("(%H:%M)") .. "\n " .. text .. "\n")
             file:close()
             hs.alert.show("已采集至日记 📝", 0.8)
         else
@@ -100,6 +100,21 @@ function clipboard.appendToObsidian()
             print("错误路径: " .. filePath)
         end
     end)
+end
+
+function formatForCallout(text)
+    -- 1. 先把文本末尾多余的换行去掉
+    text = text:gsub("%s+$", "")
+    
+    -- 2. 在每一行的开头加上 "> "
+    -- 注意：要把每一个 "\n" 替换为 "\n> "
+    local formatted = "> " .. text:gsub("\n", "\n> ")
+    
+    -- 3. 处理可能出现的空行（防止变成只有 ">" 的行，Obsidian 有时对纯 ">" 渲染不稳）
+    -- 我们可以把纯 ">" 替换为 "> " (带个空格)
+    formatted = formatted:gsub("\n>$", "\n> ")
+    
+    return formatted
 end
 
 
