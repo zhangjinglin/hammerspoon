@@ -135,7 +135,7 @@ function winLogger.captureAndLogScreenshot()
         local mdLink = string.format("\n\n---\n> [!example] 📸 屏幕快照 %s\n> ![[%s]]\n", timeStr, imgName)
         
         -- 如果你想用标准 Markdown 链接：
-        -- local mdLink = string.format("\n\n![Snapshot %s](images/%s)\n", timeStr, imgName)
+        local mdLink = string.format("\n\n![Snapshot %s](images/%s)\n", timeStr, imgName)
         
         file:write(mdLink)
         file:close()

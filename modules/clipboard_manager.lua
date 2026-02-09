@@ -53,7 +53,7 @@ function clipboard.checkAndSendToTG(text)
         if text:match("t%.me/") then
             targetChatId = config.tg_chat_id_telegram
             prefix = "✈️ 发现电报链接："
-            print("Detected t.me link, routing to Telegram group.")
+            -- print("Detected t.me link, routing to Telegram group.")
         end
 
         local url = "https://api.telegram.org/bot" .. config.tg_bot_token .. "/sendMessage"
