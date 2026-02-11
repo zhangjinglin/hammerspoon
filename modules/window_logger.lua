@@ -11,7 +11,7 @@ local titleStartTime = 0        -- 子标题开始的时间
 local screenshotTimer = nil     -- 定时器对象，必须保存到变量中防止被垃圾回收
 local currentWin = nil          -- 当前正在追踪的窗口对象（用于截图）
 
-local THRESHOLD = 60            -- 总时长超过 30 秒才记录
+local THRESHOLD = 300            -- 总时长超过 300 秒才记录
 
 -- 检查当前时间是否在禁止日志的时间段内 (23:00 - 7:00 AM)
 local function isLoggingDisabled()
