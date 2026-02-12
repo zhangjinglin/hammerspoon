@@ -65,7 +65,7 @@ function clipboard.checkAndSendToTG(text)
         -- 使用异步 HTTP 请求，不阻塞系统
         hs.http.asyncPost(url, hs.json.encode(body), {["Content-Type"] = "application/json"}, function(status, response)
             if status == 200 then
-                hs.pasteboard.setContents("")
+                -- hs.pasteboard.setContents("")
                 hs.alert.show("已转发至 Telegram ✈️", 0.8)  
             else
                 print("TG 发送失败，状态码：" .. status)
