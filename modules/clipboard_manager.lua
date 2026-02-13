@@ -1,6 +1,7 @@
 -- modules/clipboard_manager.lua
 local clipboard = {}
 local config = require("modules.config")
+local logger = require("modules.logger")
 
 local lastCmdTime = 0
 local doubleClickThreshold = 0.4 -- 两次点击间隔小于 0.4 秒视为双击
@@ -53,7 +54,6 @@ function clipboard.checkAndSendToTG(text)
         if text:match("t%.me/") then
             targetChatId = config.tg_chat_id_telegram
             prefix = "✈️ 发现电报链接："
-            -- print("Detected t.me link, routing to Telegram group.")
         end
 
         local url = "https://api.telegram.org/bot" .. config.tg_bot_token .. "/sendMessage"
@@ -85,20 +85,8 @@ function clipboard.appendToObsidian()
 
         -- 替换掉文本里面的回车
         text = formatForCallout(text)
-        
-        local fileName = os.date(config.date_format) .. ".md"
-        local filePath = config.obsidian_daily_path .. fileName
-
-        -- 3. 检查文件是否存在并写入
-        local file = io.open(filePath, "a") -- "a" 代表 append 追加模式
-        if file then
-            file:write("\n\n---\n> [!NOTE] 快速采集 " .. os.date("(%H:%M)") .. "\n " .. text .. "\n")
-            file:close()
-            hs.alert.show("已采集至日记 📝", 0.8)
-        else
-            hs.alert.show("找不到日记文件 ⚠️", 1.5)
-            print("错误路径: " .. filePath)
-        end
+        logger.insert_log("Note", text)
+        hs.alert.show("已采集至日记 📝", 0.8)
     end)
 end
 
@@ -108,7 +96,7 @@ function formatForCallout(text)
     
     -- 2. 在每一行的开头加上 "> "
     -- 注意：要把每一个 "\n" 替换为 "\n> "
-    local formatted = "> " .. text:gsub("\n", "\n> ")
+    local formatted = text:gsub("\n", "\n> ")
     
     -- 3. 处理可能出现的空行（防止变成只有 ">" 的行，Obsidian 有时对纯 ">" 渲染不稳）
     -- 我们可以把纯 ">" 替换为 "> " (带个空格)
