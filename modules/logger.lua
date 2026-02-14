@@ -14,11 +14,16 @@ function logger.init()
         if templateFile then
             local content = templateFile:read("*all")
             templateFile:close()
+
+            -- 替换标题日期为当日日期
+            local todayDate = os.date(config.date_format)
+            content = content:gsub("# 📅 %d%d%d%d%-%d%d%-%d%d 自动化日志", "# 📅 " .. todayDate .. " 自动化日志", 1)
+
             local newFile = io.open(filePath, "w")
             if newFile then
                 newFile:write(content)
                 newFile:close()
-                print("已创建今日日记 📓", 1.5)
+                print("已创建今日日记 📓")
             end
         end
     else
