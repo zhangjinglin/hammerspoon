@@ -81,6 +81,7 @@ local function recordPreviousTitleAndSwitch(appName, newTitle)
             
             -- 如果是Telegram或Edge，使用标题；如果是Other，使用应用名
             local logContent = (appType == "Other") and appName .. " - " .. currentTitle or currentTitle
+            logContent = logContent:gsub("|", " ")
             
             print(string.format("记录 %s: \"%s\" 持续 %d秒", appType, logContent, duration))
             logger.insert_log(appType, logContent, formatDuration(duration))
