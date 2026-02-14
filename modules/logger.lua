@@ -2,7 +2,7 @@ local config = require("modules.config")
 
 local logger = {}
 local filePath = nil
-local bom = "\239\187\191" -- UTF-8 BOM
+
 
 function logger.init()
     local fileName = os.date(config.date_format) .. ".md"
@@ -16,10 +16,7 @@ function logger.init()
             local content = templateFile:read("*all")
             templateFile:close()
 
-            -- 如果模板文件包含 BOM，先移除，避免重复
-            if content:sub(1, 3) == bom then
-                content = content:sub(4)
-            end
+
 
             -- 替换标题日期为当日日期
             local todayDate = os.date(config.date_format)
@@ -27,8 +24,7 @@ function logger.init()
 
             local newFile = io.open(filePath, "wb")
             if newFile then
-                -- 确保写入 BOM
-                newFile:write(bom)
+
                 newFile:write(content)
                 newFile:close()
                 print("已创建今日日记 📓")
@@ -39,8 +35,41 @@ function logger.init()
     end
 end
 
+-- 检查并修复非 UTF-8 字符串
+function logger.sanitize_utf8(str)
+    if not str then return nil end
+    
+    local res = {}
+    local i = 1
+    local len = #str
+    
+    while i <= len do
+        -- 尝试从当前位置验证 UTF-8
+        local success, pos = utf8.len(str, i)
+        if success then
+            -- 如果成功，说明剩余部分都是合法的
+            table.insert(res, str:sub(i))
+            break
+        else
+            -- 如果失败，pos 是第一个非法字节的位置
+            if pos > i then
+                table.insert(res, str:sub(i, pos - 1))
+            end
+            -- 替换非法字节为空格
+            table.insert(res, " ")
+            -- 跳过非法字节，继续检查下一个
+            i = pos + 1
+        end
+    end
+    
+    return table.concat(res)
+end
+
 -- 向日志中插入新的记录, 参数包含 type, content, duration
 function logger.insert_log(type, content, duration)
+    -- 确保 content 是 UTF-8 编码
+    content = logger.sanitize_utf8(content)
+
     if not filePath then
         return false
     end
@@ -53,10 +82,7 @@ function logger.insert_log(type, content, duration)
     local filecontent = file:read("*all")
     file:close()
 
-    -- 读取时如果已经有 BOM，先移除，以便统一处理
-    if filecontent:sub(1, 3) == bom then
-        filecontent = filecontent:sub(4)
-    end
+
 
     if type == 'Note' then
         local note = "> [" .. os.date("%H:%M") .. "] " .. content .. "\n\n"
@@ -74,8 +100,7 @@ function logger.insert_log(type, content, duration)
 
     local writeFile = io.open(filePath, "wb")
     if writeFile then
-        -- 写入时统一加上 BOM
-        writeFile:write(bom)
+
         writeFile:write(filecontent)
         writeFile:close()
         return true
