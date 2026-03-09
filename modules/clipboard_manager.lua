@@ -46,6 +46,11 @@ function clipboard.checkAndSendToTG(text)
     -- 极简正则判断：是否以 http:// 或 https:// 开头
     if text:match("^https?://[%w-_%.%?%.:/%+=&]+") then
 
+        -- 跳过夸克网盘链接，不发送到 Telegram
+        if text:match("^https://pan%.quark%.cn") then
+            return
+        end
+
         -- 确定路由目标
         local targetChatId = config.tg_chat_id_default
         local prefix = "🔗 发现新链接："

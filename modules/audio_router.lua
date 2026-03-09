@@ -60,21 +60,22 @@ local function evaluateAndRouteAudio(reason)
     local settings = config.audio_router or {}
     local monitorKeyword = settings.monitor_output_keyword or ""
     local headphoneKeyword = settings.headphone_output_keyword or ""
+    local projectorKeyword = settings.projector_output_keyword or "JMGO"
 
-    if monitorKeyword == "" or headphoneKeyword == "" then
-        log("配置缺失：monitor_output_keyword 或 headphone_output_keyword 为空")
+    if monitorKeyword == "" or headphoneKeyword == "" or projectorKeyword == "" then
+        log("配置缺失：monitor_output_keyword / headphone_output_keyword / projector_output_keyword")
         notify("音频路由配置缺失", true)
         return
     end
 
-    local monitorDevice = findOutputDeviceByKeyword(monitorKeyword)
-    local monitorAvailable = monitorDevice ~= nil
+    local projectorDevice = findOutputDeviceByKeyword(projectorKeyword)
+    local projectorAvailable = projectorDevice ~= nil
 
-    local targetKeyword = monitorAvailable and monitorKeyword or headphoneKeyword
+    local targetKeyword = projectorAvailable and headphoneKeyword or monitorKeyword
     local targetDevice = findOutputDeviceByKeyword(targetKeyword)
 
     if not targetDevice then
-        local stateText = monitorAvailable and "显示器" or "耳机"
+        local stateText = projectorAvailable and "耳机" or "显示器"
         local msg = string.format("未找到%s输出设备：%s", stateText, targetKeyword)
         log(msg)
         notify(msg, true)
@@ -89,7 +90,7 @@ local function evaluateAndRouteAudio(reason)
 
     local ok = targetDevice:setDefaultOutputDevice()
     if ok then
-        local routeText = monitorAvailable and "显示器" or "耳机"
+        local routeText = projectorAvailable and "耳机(JMGO已出现)" or "显示器(JMGO已关闭)"
         local msg = string.format("音频切换到%s：%s", routeText, targetDevice:name() or "unknown")
         log(msg)
         notify(msg, false)
