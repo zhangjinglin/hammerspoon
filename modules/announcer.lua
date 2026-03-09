@@ -3,7 +3,15 @@ local announcer = {}
 local config = require("modules.config")
 
 local function format_cn_time(hour, min)
-    local period = hour < 12 and "上午" or "下午"
+    local period
+    if hour < 12 then
+        period = "上午"
+    elseif hour < 18 then
+        period = "下午"
+    else
+        period = "晚上"
+    end
+
     local h12 = hour % 12
     if h12 == 0 then
         h12 = 12
