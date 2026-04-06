@@ -4,6 +4,7 @@ local config = require("modules.config")
 
 local overlayCanvases = {}
 local countdownTimer = nil
+local escEventTap = nil
 local lastTriggeredKey = nil
 
 local function format_cn_time(hour, min)
@@ -32,6 +33,11 @@ local function clear_overlay()
     if countdownTimer then
         countdownTimer:stop()
         countdownTimer = nil
+    end
+
+    if escEventTap then
+        escEventTap:stop()
+        escEventTap = nil
     end
 
     for _, canvas in ipairs(overlayCanvases) do
@@ -118,6 +124,15 @@ local function show_overlay(hour, min)
     local remainingSeconds = config.announcer.countdown_seconds or 30
     update_overlay(remainingSeconds, hour, min)
 
+    escEventTap = hs.eventtap.new({ hs.eventtap.event.types.keyDown }, function(event)
+        if event:getKeyCode() == hs.keycodes.map.escape then
+            clear_overlay()
+            return true
+        end
+
+        return false
+    end):start()
+
     countdownTimer = hs.timer.doEvery(1, function()
         remainingSeconds = remainingSeconds - 1
 
@@ -156,7 +171,9 @@ function announcer.init()
                     hs.execute(string.format("say -v Binbin '%s'", speakText))
                 end
 
-                show_overlay(now.hour, now.min)
+                if now.hour < (config.announcer.activity_end_hour or config.announcer.end_hour) then
+                    show_overlay(now.hour, now.min)
+                end
             end
         end
     end):start()
