@@ -1,11 +1,75 @@
 local winLogger = {}
 local config = require("modules.config")
-local logger = require("modules.logger")
 
 -- [状态追踪变量]
 local currentApp = ""           -- 当前应用名称
 local currentTitle = ""         -- 当前标题
 local titleStartTime = 0        -- 当前标题的开始时间
+
+local function sanitizeText(text)
+    if not text then return "" end
+
+    local clean = tostring(text)
+    -- 只移除 Telegram 标题里常见的完整隐形控制符，避免按字节误删中文字符。
+    clean = clean:gsub("\226\128\142", "")
+    clean = clean:gsub("\226\129\168", "")
+    clean = clean:gsub("\226\129\169", "")
+
+    if utf8 and utf8.len then
+        local ok, valid = pcall(utf8.len, clean)
+        if ok and valid then
+            return clean
+        end
+
+        local res = {}
+        local i = 1
+        while i <= #clean do
+            local success, pos = utf8.len(clean, i)
+            if success then
+                table.insert(res, clean:sub(i))
+                break
+            end
+            if pos and pos > i then
+                table.insert(res, clean:sub(i, pos - 1))
+            end
+            i = (pos or i) + 1
+        end
+        clean = table.concat(res)
+    end
+
+    return clean
+end
+
+local function postWindowLogToTG(appType, content, duration)
+    local chatId = config.tg_chat_id_window_logger
+    if not config.tg_bot_token or not chatId or chatId == "" then
+        print("window_logger: TG 发送被跳过，未配置 Bot Token 或窗口日志群组 ID")
+        return
+    end
+
+    local text = string.format(
+        "[%s] %s | %s | %s",
+        os.date("%H:%M"),
+        sanitizeText(appType),
+        sanitizeText(content),
+        sanitizeText(duration)
+    )
+
+    local url = "https://api.telegram.org/bot" .. config.tg_bot_token .. "/sendMessage"
+    local body = {
+        chat_id = chatId,
+        text = text
+    }
+
+    print("window_logger: 准备发送 TG 日志到 " .. tostring(chatId) .. ": " .. text)
+    hs.http.asyncPost(url, hs.json.encode(body), {["Content-Type"] = "application/json"}, function(status, response)
+        if status == 200 then
+            print("window_logger: TG 发送成功")
+        else
+            print("window_logger: TG 发送失败，状态码：" .. tostring(status) .. ", 响应：" .. tostring(response))
+        end
+    end)
+end
 
 -- [应用类型判断]
 local function getAppType(appName)
@@ -20,9 +84,9 @@ end
 -- [标题清理：移除Telegram等应用的未读计数]
 local function normalizeTitle(appName, title)
     if not title then return "" end
+    title = sanitizeText(title)
     if appName == "Telegram" then
-        -- 移除特殊的 Unicode 字符
-        local clean = title:gsub("[\226\128\142\226\129\168\226\129\169]", "")
+        local clean = title
         -- 替换管道符
         clean = clean:gsub("|", " ")
         -- 移除开头的计数："(33) " -> ""
@@ -84,7 +148,8 @@ local function recordPreviousTitleAndSwitch(appName, newTitle)
             logContent = logContent:gsub("|", " ")
             
             print(string.format("记录 %s: \"%s\" 持续 %d秒", appType, logContent, duration))
-            logger.insert_log(appType, logContent, formatDuration(duration))
+            local formattedDuration = formatDuration(duration)
+            postWindowLogToTG(appType, logContent, formattedDuration)
         else
             print(string.format("跳过 %s 的短暂活动: \"%s\" 仅 %d秒", appName, currentTitle, duration))
         end

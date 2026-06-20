@@ -17,15 +17,15 @@ local function ensureDailyFileExists(targetPath)
 
     local templateFile, templateErr = io.open(config.teplate_path, "rb")
     if not templateFile then
-        print(string.format("logger: 无法打开模板文件 %s: %s", config.teplate_path, tostring(templateErr)))
-        print(string.format("logger: 原日志文件不存在 %s: %s", targetPath, tostring(openErr)))
+        -- print(string.format("logger: 无法打开模板文件 %s: %s", config.teplate_path, tostring(templateErr)))
+        -- print(string.format("logger: 原日志文件不存在 %s: %s", targetPath, tostring(openErr)))
         return false
     end
 
     local content = templateFile:read("*all")
     templateFile:close()
     if not content then
-        print(string.format("logger: 模板文件读取失败 %s", config.teplate_path))
+        -- print(string.format("logger: 模板文件读取失败 %s", config.teplate_path))
         return false
     end
 
@@ -34,18 +34,18 @@ local function ensureDailyFileExists(targetPath)
 
     local newFile, createErr = io.open(targetPath, "wb")
     if not newFile then
-        print(string.format("logger: 创建日记文件失败 %s: %s", targetPath, tostring(createErr)))
+        -- print(string.format("logger: 创建日记文件失败 %s: %s", targetPath, tostring(createErr)))
         return false
     end
 
     local ok, writeErr = newFile:write(content)
     newFile:close()
     if not ok then
-        print(string.format("logger: 写入新日记文件失败 %s: %s", targetPath, tostring(writeErr)))
+        -- print(string.format("logger: 写入新日记文件失败 %s: %s", targetPath, tostring(writeErr)))
         return false
     end
 
-    print("已创建今日日记 📓")
+    -- print("已创建今日日记 📓")
     return true
 end
 
@@ -55,7 +55,7 @@ local function insertBeforeMarker(filecontent, marker, line, logType)
     end, 1)
 
     if count == 0 then
-        print(string.format("logger: 未找到占位符 %s，类型 %s 未写入", marker, logType))
+        -- print(string.format("logger: 未找到占位符 %s，类型 %s 未写入", marker, logType))
     end
 
     return updated, count
@@ -64,7 +64,7 @@ end
 function logger.init()
     filePath = resolveTodayFilePath()
     if not ensureDailyFileExists(filePath) then
-        print(string.format("logger: 初始化失败，无法准备日志文件 %s", tostring(filePath)))
+        -- print(string.format("logger: 初始化失败，无法准备日志文件 %s", tostring(filePath)))
     end
 end
 
@@ -118,14 +118,14 @@ function logger.insert_log(logType, content, duration)
 
     local file, readErr = io.open(filePath, "rb")
     if not file then
-        print(string.format("logger: 打开日志文件失败 %s: %s", filePath, tostring(readErr)))
+        -- print(string.format("logger: 打开日志文件失败 %s: %s", filePath, tostring(readErr)))
         return false
     end
 
     local filecontent = file:read("*all")
     file:close()
     if not filecontent then
-        print(string.format("logger: 读取日志文件失败 %s", filePath))
+        -- print(string.format("logger: 读取日志文件失败 %s", filePath))
         return false
     end
 
@@ -144,7 +144,7 @@ function logger.insert_log(logType, content, duration)
         local line = "| " .. os.date("%H:%M") .. " | " .. content .. " | " .. tostring(duration or "") .. " |\n"
         filecontent, writeCount = insertBeforeMarker(filecontent, "INSERT_OTHER", line, logType)
     else
-        print(string.format("logger: 未知日志类型 %s", tostring(logType)))
+        -- print(string.format("logger: 未知日志类型 %s", tostring(logType)))
         return false
     end
 
@@ -154,7 +154,7 @@ function logger.insert_log(logType, content, duration)
 
     local writeFile, openWriteErr = io.open(filePath, "wb")
     if not writeFile then
-        print(string.format("logger: 打开写入文件失败 %s: %s", filePath, tostring(openWriteErr)))
+        -- print(string.format("logger: 打开写入文件失败 %s: %s", filePath, tostring(openWriteErr)))
         return false
     end
 
@@ -162,7 +162,7 @@ function logger.insert_log(logType, content, duration)
     writeFile:close()
 
     if not ok then
-        print(string.format("logger: 写入日志文件失败 %s: %s", filePath, tostring(writeErr)))
+        -- print(string.format("logger: 写入日志文件失败 %s: %s", filePath, tostring(writeErr)))
         return false
     end
 
