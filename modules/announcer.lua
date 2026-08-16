@@ -107,7 +107,7 @@ local function build_overlay_for_screen(screen)
 
     canvas[3] = {
         type = "text",
-        text = "起身活动一下",
+        text = "起身活动一下,放松一下你的眼睛",
         textSize = 34,
         textColor = {
             white = 1,
