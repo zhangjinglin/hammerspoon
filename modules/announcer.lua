@@ -289,26 +289,24 @@ function announcer.init()
 
 
                     -- 午休时间完全跳过
-                    -- if not isQuietTime(now.hour, now.min) then
-                    local text = format_cn_time(
-                        now.hour,
-                        now.min
-                    )
-
-
-                    hs.execute(
-                        string.format(
-                            "say -v Binbin '%s'",
-                            text
+                    if not isQuietTime(now.hour, now.min) then
+                        local text = format_cn_time(
+                            now.hour,
+                            now.min
                         )
-                    )
 
+                        hs.execute(
+                            string.format(
+                                "say -v Binbin '%s'",
+                                text
+                            )
+                        )
+                    end
 
                     show_overlay(
                         now.hour,
                         now.min
                     )
-                    -- end
                 end
             end
         end
