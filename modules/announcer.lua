@@ -296,12 +296,12 @@ function announcer.init()
                     )
 
 
-                    -- hs.execute(
-                    --     string.format(
-                    --         "say -v Binbin '%s'",
-                    --         text
-                    --     )
-                    -- )
+                    hs.execute(
+                        string.format(
+                            "say -v Binbin '%s'",
+                            text
+                        )
+                    )
 
 
                     show_overlay(
