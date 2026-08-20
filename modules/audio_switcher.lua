@@ -1,66 +1,89 @@
-local HEADPHONE_NAME     = "External Headphones" -- 例如: "External Headphones" 或 "AirPods Pro"
+local AMP_NAME           = "External Headphones" -- 外置功放
 local MONITOR_NAME       = "27M3U"
 local PROJECTOR_NAME     = "JMGO"
--- 定义屏幕监视器
+
 local lastProjectorState = nil
-local m3uDisplay         = nil
 
-local audioSwitcher      = hs.screen.watcher.new(function()
+
+local function switchAudio()
     local screens = hs.screen.allScreens()
-    local isProjectorOnline = false
-    local isMonitorOnline = false
 
-    -- 检查 JMGO 是否在线
+    local projectorOnline = false
+
     for _, screen in ipairs(screens) do
-        if screen:name() == PROJECTOR_NAME then
-            isProjectorOnline = true
-            hs.print("jmgo on")
-        end
-        if screen:name() == MONITOR_NAME then
-            isMonitorOnline = true
-            hs.print("27m3u on")
+        local name = screen:name()
+
+        hs.printf("检测屏幕: %s", name)
+
+        if name == PROJECTOR_NAME then
+            projectorOnline = true
+            break
         end
     end
 
-    if isMonitorOnline then
-        local monitorAudio = hs.audiodevice.findOutputByName(MONITOR_NAME)
-        if monitorAudio then
-            monitorAudio:setDefaultOutputDevice()
-            hs.printf("音频已切换回: " .. MONITOR_NAME)
-            monitorAudio:setVolume(100)
-        end
+
+    -- 状态没有变化，不重复切换
+    if projectorOnline == lastProjectorState then
+        return
     end
 
-    -- -- 状态未发生变化时直接返回，避免屏幕刷新时反复执行声音切换
-    -- if isProjectorOnline == lastProjectorState then
-    --     return
-    -- end
-    -- lastProjectorState = isProjectorOnline
+    lastProjectorState = projectorOnline
 
-    -- 执行状态切换逻辑
-    if isProjectorOnline then
-        -- 切换到外置耳机
-        local headphone = hs.audiodevice.findOutputByName(HEADPHONE_NAME)
-        if headphone then
-            headphone:setDefaultOutputDevice()
-            headphone:setVolume(100)
-            hs.alert.show("音频已切换至: " .. HEADPHONE_NAME)
+
+    -- 等待 HDMI/DP 音频设备注册
+    hs.timer.doAfter(1, function()
+        if projectorOnline then
+            -- JMGO 开机 -> 外置功放
+
+            local amp = hs.audiodevice.findOutputByName(AMP_NAME)
+
+            if amp then
+                amp:setDefaultOutputDevice()
+                amp:setVolume(100)
+
+                hs.alert.show("切换到外置功放")
+            else
+                hs.alert.show("未找到外置功放")
+            end
         else
-            hs.alert.show("未找到耳机设备: " .. HEADPHONE_NAME, 3)
-        end
-    else
-        -- 切换回 27M3U 显示器自带扬声器
-        local monitorAudio = hs.audiodevice.findOutputByName(MONITOR_NAME)
-        if monitorAudio then
-            monitorAudio:setDefaultOutputDevice()
-            hs.alert.show("音频已切换回: " .. MONITOR_NAME)
-        else
-            local currentDevice = hs.audiodevice.defaultOutputDevice()
-            if currentDevice then
-                currentDevice:setVolume(0)
+            -- JMGO关闭 -> 27M3U
+
+            local monitor = hs.audiodevice.findOutputByName(MONITOR_NAME)
+
+            if monitor then
+                monitor:setDefaultOutputDevice()
+                monitor:setVolume(100)
+
+                hs.alert.show("切换到27M3U")
+            else
+                -- 没有27M3U -> 静音
+
+                local current = hs.audiodevice.defaultOutputDevice()
+
+                if current then
+                    current:setVolume(0)
+                end
+
+                hs.alert.show("没有可用输出设备")
             end
         end
-    end
+    end)
+end
+
+
+
+-- 创建屏幕监听
+local audioSwitcher = hs.screen.watcher.new(function()
+    switchAudio()
 end)
+
+
+-- 开始监听
+audioSwitcher:start()
+
+
+-- Hammerspoon启动时立即检测一次
+switchAudio()
+
 
 return audioSwitcher
