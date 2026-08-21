@@ -297,7 +297,7 @@ function announcer.init()
 
                         hs.execute(
                             string.format(
-                                "say -v Binbin '%s'",
+                                "say -v Tingting '%s'",
                                 text
                             )
                         )
