@@ -10,6 +10,7 @@ local shortcuts = require("modules.shortcuts")
 -- local audioRouter = require("modules.audio_router")
 local audioSwitcher = require("modules.audio_switcher")
 local input = require("modules.app_input")
+local mouseGestures = require("modules.mouse_gestures")
 
 
 audioSwitcher:start()
@@ -24,3 +25,6 @@ announcer.init()
 shortcuts.init()
 -- audioRouter.init()
 input.start()
+
+-- 鼠标手势
+mouseGestures.init()
