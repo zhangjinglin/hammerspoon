@@ -3,22 +3,37 @@ local mouseGestures = {}
 
 local GESTURE_THRESHOLD = 50
 local mouseStartPos = nil
+local suppressNext = false
+
+-- 普通右键点击：合成一对事件，把菜单正常弹出来
+local function simulateRightClick()
+    suppressNext = true
+    local pos = hs.mouse.absolutePosition()
+    hs.eventtap.event.newMouseEvent(hs.eventtap.event.types.rightMouseDown, pos):post()
+    hs.eventtap.event.newMouseEvent(hs.eventtap.event.types.rightMouseUp, pos):post()
+end
 
 function mouseGestures.init()
     mouseGestures.watcher = hs.eventtap.new({
         hs.eventtap.event.types.rightMouseDown,
         hs.eventtap.event.types.rightMouseUp
     }, function(event)
+        if suppressNext then
+            suppressNext = false
+            return false
+        end
+
         local eventType = event:getType()
 
         if eventType == hs.eventtap.event.types.rightMouseDown then
-            mouseStartPos = hs.mouse.absolutePosition()
-            return false
+            -- 菜单在按下时就会弹出，必须在这里拦截
+            mouseStartPos = event:location()
+            return true
 
         elseif eventType == hs.eventtap.event.types.rightMouseUp then
             if not mouseStartPos then return false end
 
-            local mouseEndPos = hs.mouse.absolutePosition()
+            local mouseEndPos = event:location()
             local dy = mouseEndPos.y - mouseStartPos.y
             mouseStartPos = nil
 
@@ -37,9 +52,11 @@ function mouseGestures.init()
                     hs.eventtap.event.newKeyEvent({}, "return", false):post()
                     hs.alert.show("↩ Return", 0.5)
                 end
-                return true -- 拦截右键菜单
+            else
+                -- 普通点击，恢复右键菜单
+                simulateRightClick()
             end
-            return false
+            return true
         end
     end):start()
 end
