@@ -33,15 +33,6 @@ local function format_cn_time(hour, min)
 end
 
 
--- 午休静音时间 11:30 - 13:30
-local function isQuietTime(hour, min)
-    local minutes = hour * 60 + min
-
-    return minutes >= 11 * 60 + 30
-        and minutes < 13 * 60 + 35
-end
-
-
 local function clear_overlay()
     if countdownTimer then
         countdownTimer:stop()
@@ -288,8 +279,6 @@ function announcer.init()
                     lastTriggeredKey = triggerKey
 
 
-                    -- 午休时间完全跳过
-                    -- if not isQuietTime(now.hour, now.min) then
                     local text = format_cn_time(
                         now.hour,
                         now.min
@@ -301,8 +290,6 @@ function announcer.init()
                             text
                         )
                     )
-                    -- end
-
                     show_overlay(
                         now.hour,
                         now.min

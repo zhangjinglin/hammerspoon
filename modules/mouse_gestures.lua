@@ -61,11 +61,4 @@ function mouseGestures.init()
     end):start()
 end
 
-function mouseGestures.destroy()
-    if mouseGestures.watcher then
-        mouseGestures.watcher:stop()
-        mouseGestures.watcher = nil
-    end
-end
-
 return mouseGestures

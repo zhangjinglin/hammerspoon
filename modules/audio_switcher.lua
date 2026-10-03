@@ -13,7 +13,7 @@ local function switchAudio()
     for _, screen in ipairs(screens) do
         local name = screen:name()
 
-        hs.printf("检测屏幕: %s", name)
+        -- hs.printf("检测屏幕: %s", name) -- 调试用：排查时取消注释
 
         if name == PROJECTOR_NAME then
             projectorOnline = true

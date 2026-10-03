@@ -21,6 +21,7 @@ git clone git@github.com:zhangjinglin/hammerspoon.git ~/.hammerspoon
 ~/.hammerspoon
 ├── init.lua            # 入口，控制各模块的启用/禁用
 ├── modules/            # 功能模块
+├── bin/                # Swift 辅助进程源码与二进制
 └── template.md         # Obsidian 日志模板
 ```
 
@@ -31,7 +32,8 @@ git clone git@github.com:zhangjinglin/hammerspoon.git ~/.hammerspoon
 | `mouse_gestures.lua` | 启用 | 右键鼠标手势：按住右键**上滑** = Backspace，**下滑** = Return；普通右键点击仍正常弹出菜单 |
 | `announcer.lua` | 启用 | 整点/半点语音报时（8:00–21:00，Tingting 中文语音），带全屏倒计时遮罩提醒起身 |
 | `shortcuts.lua` | 启用 | `F1` 区域截屏并复制到剪贴板 |
-| `app_input.lua` | 启用 | 按应用自动切换输入法：终端 / iTerm2 / VS Code / Zed / Alacritty 强制英文（适配豆包输入法） |
+| `app_input.lua` | 注释 | 按应用自动切换输入法（已被语音结束切 ABC 覆盖，停用） |
+| `doubao_voice.lua` | 启用 | 豆包语音开始自动静音、结束恢复声音并切 ABC（依赖 `bin/doubao_voice_watch` 监控语音悬浮窗） |
 | `audio_switcher.lua` | 启用 | 监听投影仪（JMGO）连接状态，自动切换音频输出到外置功放 / 显示器 |
 | `clipboard_manager.lua` | 注释 | 双击 Command 将剪贴板内容（文本/图片）发送到 Telegram，支持长文本自动分块 |
 | `window_logger.lua` | 注释 | 记录当前应用与窗口标题停留时长，写入 Obsidian 每日笔记 |
@@ -43,6 +45,14 @@ git clone git@github.com:zhangjinglin/hammerspoon.git ~/.hammerspoon
 | `test.lua` | 调试 | 开发调试用，勿启用 |
 
 启用/禁用模块：编辑 `init.lua`，取消对应行的注释即可。
+
+## 豆包语音监控编译
+
+`bin/` 下只提交 Swift 源码，二进制需本地编译一次：
+
+```bash
+swiftc -O -o bin/doubao_voice_watch bin/doubao_voice_watch.swift
+```
 
 ## 鼠标手势实现要点
 
