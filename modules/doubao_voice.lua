@@ -8,30 +8,77 @@ local M = {}
 local ENGLISH_SOURCE_ID = "com.apple.keylayout.ABC"
 local SETTLE_DELAY = 0.3
 local WATCH_BIN = os.getenv("HOME") .. "/.hammerspoon/bin/doubao_voice_watch"
+-- 当前输出设备不支持软件静音时（如 HDMI 显示器），切到这个可控设备
+local FALLBACK_OUTPUT = "Mac mini Speakers"
 
 local task = nil
 local taskBuf = ""
 local prevMuted = false
+local origDevice = nil
+local switchedToFallback = false
+local fallbackPrevMuted = false
+local fallbackPrevVolume = nil
 
-local function setMuted(m)
+local function muteCurrent()
     local dev = hs.audiodevice.defaultOutputDevice()
-    if dev then
-        dev:setMuted(m)
+    if not dev then
+        return false
+    end
+    origDevice = dev
+    prevMuted = dev:muted() or false
+    dev:setMuted(true)
+    if dev:muted() then
+        print("[doubao-voice] muted on " .. tostring(dev:name()))
+        return true
+    end
+    -- 当前设备不支持软件静音（如 HDMI 显示器），切到可控设备
+    local fb = hs.audiodevice.findOutputByName(FALLBACK_OUTPUT)
+    if fb then
+        fallbackPrevMuted = fb:muted() or false
+        fallbackPrevVolume = fb:volume()
+        fb:setMuted(true)
+        fb:setVolume(0)
+        fb:setDefaultOutputDevice()
+        switchedToFallback = true
+        print("[doubao-voice] device unmuttable, switched to " .. FALLBACK_OUTPUT)
+        return true
+    end
+    print("[doubao-voice] mute failed, no fallback device")
+    return false
+end
+
+local function unmuteCurrent()
+    if switchedToFallback then
+        switchedToFallback = false
+        if origDevice then
+            origDevice:setDefaultOutputDevice()
+            print("[doubao-voice] switched back to " .. tostring(origDevice:name()))
+            origDevice = nil
+        end
+        local fb = hs.audiodevice.findOutputByName(FALLBACK_OUTPUT)
+        if fb then
+            if fallbackPrevVolume then
+                fb:setVolume(fallbackPrevVolume)
+            end
+            fb:setMuted(fallbackPrevMuted)
+        end
+    else
+        local dev = hs.audiodevice.defaultOutputDevice()
+        if dev then
+            dev:setMuted(prevMuted)
+        end
+        print("[doubao-voice] unmuted, restored=" .. tostring(prevMuted))
     end
 end
 
 local function onVoiceStart(info)
     print("[doubao-voice] VOICE ON " .. tostring(info or ""))
-    local dev = hs.audiodevice.defaultOutputDevice()
-    prevMuted = dev and dev:muted() or false
-    setMuted(true)
-    print("[doubao-voice] muted, prevMuted=" .. tostring(prevMuted))
+    muteCurrent()
 end
 
 local function onVoiceEnd()
     print("[doubao-voice] VOICE OFF")
-    setMuted(prevMuted)
-    print("[doubao-voice] unmuted, restored=" .. tostring(prevMuted))
+    unmuteCurrent()
     hs.timer.doAfter(SETTLE_DELAY, function()
         local cur = hs.keycodes.currentSourceID()
         if cur ~= ENGLISH_SOURCE_ID then
