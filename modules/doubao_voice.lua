@@ -31,7 +31,7 @@ local function muteCurrent()
     prevMuted = dev:muted() or false
     dev:setMuted(true)
     if dev:muted() then
-        print("[doubao-voice] muted on " .. tostring(dev:name()))
+        -- print("[doubao-voice] muted on " .. tostring(dev:name()))
         return true
     end
     -- 当前设备不支持软件静音（如 HDMI 显示器），切到可控设备
@@ -43,7 +43,7 @@ local function muteCurrent()
         fb:setVolume(0)
         fb:setDefaultOutputDevice()
         switchedToFallback = true
-        print("[doubao-voice] device unmuttable, switched to " .. FALLBACK_OUTPUT)
+        -- print("[doubao-voice] device unmuttable, switched to " .. FALLBACK_OUTPUT)
         return true
     end
     print("[doubao-voice] mute failed, no fallback device")
@@ -55,7 +55,7 @@ local function unmuteCurrent()
         switchedToFallback = false
         if origDevice then
             origDevice:setDefaultOutputDevice()
-            print("[doubao-voice] switched back to " .. tostring(origDevice:name()))
+            -- print("[doubao-voice] switched back to " .. tostring(origDevice:name()))
             origDevice = nil
         end
         local fb = hs.audiodevice.findOutputByName(FALLBACK_OUTPUT)
@@ -70,28 +70,28 @@ local function unmuteCurrent()
         if dev then
             dev:setMuted(prevMuted)
         end
-        print("[doubao-voice] unmuted, restored=" .. tostring(prevMuted))
+        -- print("[doubao-voice] unmuted, restored=" .. tostring(prevMuted))
     end
 end
 
 local function onVoiceStart(info)
-    print("[doubao-voice] VOICE ON " .. tostring(info or ""))
+    -- print("[doubao-voice] VOICE ON " .. tostring(info or ""))
     voiceOn = true
     lastVoiceOnAt = hs.timer.secondsSinceEpoch()
     muteCurrent()
 end
 
 local function onVoiceEnd()
-    print("[doubao-voice] VOICE OFF")
+    -- print("[doubao-voice] VOICE OFF")
     voiceOn = false
     unmuteCurrent()
     hs.timer.doAfter(SETTLE_DELAY, function()
         local cur = hs.keycodes.currentSourceID()
         if cur ~= ENGLISH_SOURCE_ID then
             hs.keycodes.currentSourceID(ENGLISH_SOURCE_ID)
-            print("[doubao-voice] switched to ABC, now=" .. tostring(hs.keycodes.currentSourceID()))
-        else
-            print("[doubao-voice] already ABC, skip")
+            -- print("[doubao-voice] switched to ABC, now=" .. tostring(hs.keycodes.currentSourceID()))
+        -- else
+        --     print("[doubao-voice] already ABC, skip")
         end
     end)
 end
@@ -135,11 +135,11 @@ local function startTask()
         return true
     end)
     task:start()
-    print("[doubao-voice] watcher started")
+    -- print("[doubao-voice] watcher started")
 end
 
 function M.start()
-    print("[doubao-voice] start")
+    -- print("[doubao-voice] start")
     if not task then
         startTask()
     end

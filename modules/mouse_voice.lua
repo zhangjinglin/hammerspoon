@@ -341,8 +341,8 @@ function M.init()
         end
     end
 
-    print(string.format("[mouse-voice] 已启动：左键长按 %dms → 点按 %s 启动/结束，位移>%dpx 取消",
-        HOLD_MS, tostring(KEY_NAME), MOVE_CANCEL_PX))
+    -- print(string.format("[mouse-voice] 已启动：左键长按 %dms → 点按 %s 启动/结束，位移>%dpx 取消",
+    --     HOLD_MS, tostring(KEY_NAME), MOVE_CANCEL_PX))
 end
 
 function M.stop()

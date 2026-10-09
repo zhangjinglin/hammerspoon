@@ -15,7 +15,7 @@ M.mouseVoice = {
     maxHoldMs = 120000,   -- 兜底：最长按住时间
     requireEditableElement = false, -- 已关闭：Electron 等应用 AX 识别不可靠，改为长按即触发
     feedback = true,      -- 触发时显示提示
-    debug = true,         -- 输出日志到 Hammerspoon 控制台
+    debug = false,      -- true 则输出日志到控制台（排查时再打开）
     excludedApps = {      -- 应用黑名单（bundle id 或名称）
         "com.tencent.xinWeChat",
     },
