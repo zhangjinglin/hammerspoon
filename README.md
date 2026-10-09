@@ -30,6 +30,7 @@ git clone git@github.com:zhangjinglin/hammerspoon.git ~/.hammerspoon
 | 模块 | 状态 | 功能 |
 | --- | --- | --- |
 | `mouse_gestures.lua` | 启用 | 右键鼠标手势：按住右键**上滑** = Backspace，**下滑** = Return；普通右键点击仍正常弹出菜单 |
+| `mouse_voice.lua` | 启用 | 左键长按语音：任意位置按住左键 0.5s → HID 点按豆包语音快捷键（右 Option）开始语音，松开左键再点按一次结束、文字上屏；拖拽/微信内不触发 |
 | `announcer.lua` | 启用 | 整点/半点语音报时（8:00–21:00，Tingting 中文语音），带全屏倒计时遮罩提醒起身 |
 | `shortcuts.lua` | 启用 | `F1` 区域截屏并复制到剪贴板 |
 | `app_input.lua` | 注释 | 按应用自动切换输入法（已被语音结束切 ABC 覆盖，停用） |
@@ -52,6 +53,47 @@ git clone git@github.com:zhangjinglin/hammerspoon.git ~/.hammerspoon
 
 ```bash
 swiftc -O -o bin/doubao_voice_watch bin/doubao_voice_watch.swift
+```
+
+## 鼠标长按语音（mouse_voice）
+
+在任意位置按住左键 0.5 秒（不用动键盘）即可开始豆包语音输入，松开左键结束。
+
+- 不吞鼠标事件：普通点击、双击选词、拖拽选字完全不受影响；
+- 长按即触发（文本框 AX 识别已关闭，Electron 等应用不可靠）；
+- 触发后位移超过 25px 视为拖拽，自动取消/结束；
+- 豆包须设为"免按模式"（按一次开始、按任意键结束），快捷键与 `config.mouseVoice.key` 一致；
+- 合成走 HID 层（`bin/hidtap`，`CGEventPost kCGHIDEventTap`），会话层合成（eventtap / System Events）豆包不识别；
+- 默认在微信里不触发（避免和微信自带的按住说话打架），可在 `config.mouseVoice.excludedApps` 调整。
+
+`modules/config.lua` 里的可调项：
+
+```lua
+M.mouseVoice = {
+    enabled = true,
+    key = "rightalt",     -- 必须和豆包输入法设置里的语音快捷键一致（rightalt/ctrl/fn）
+    holdMs = 500,
+    moveCancelPx = 25,
+    requireEditableElement = false, -- true 则只在可编辑文本框里触发
+    feedback = true,
+    debug = true,
+    excludedApps = { "com.tencent.xinWeChat" },
+}
+```
+
+构建 HID 压键小工具（已提交二进制，改源码后重编）：
+
+```bash
+swiftc -O -o bin/hidtap bin/hidtap.swift
+```
+
+调试（Hammerspoon 控制台里执行）：
+
+```lua
+local mv = require("modules.mouse_voice")
+mv.test(2)     -- 不碰鼠标，HID 点按两次（隔 2 秒），验证豆包会不会出语音悬浮条
+mv.inspect()   -- 把鼠标放到输入框上执行，看 AX 文本框识别状态（仅供参考，不再做触发门槛）
+mv.status()    -- 当前状态 / 监控进程 / 豆包语音是否开启
 ```
 
 ## 鼠标手势实现要点

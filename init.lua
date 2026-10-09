@@ -12,6 +12,7 @@ local audioSwitcher = require("modules.audio_switcher")
 -- local input = require("modules.app_input") -- 停用：语音结束已切 ABC，应用切换切英文冗余
 local doubaoVoice = require("modules.doubao_voice")
 local mouseGestures = require("modules.mouse_gestures")
+local mouseVoice = require("modules.mouse_voice")
 
 
 audioSwitcher:start()
@@ -30,3 +31,6 @@ doubaoVoice.start()
 
 -- 鼠标手势
 mouseGestures.init()
+
+-- 鼠标长按语音（左键长按 → 豆包语音输入）
+mouseVoice.init()

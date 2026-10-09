@@ -13,6 +13,9 @@ local FALLBACK_OUTPUT = "Mac mini Speakers"
 
 local task = nil
 local taskBuf = ""
+-- 语音状态（供 mouse_voice 做触发回执）
+local voiceOn = false
+local lastVoiceOnAt = 0
 local prevMuted = false
 local origDevice = nil
 local switchedToFallback = false
@@ -73,11 +76,14 @@ end
 
 local function onVoiceStart(info)
     print("[doubao-voice] VOICE ON " .. tostring(info or ""))
+    voiceOn = true
+    lastVoiceOnAt = hs.timer.secondsSinceEpoch()
     muteCurrent()
 end
 
 local function onVoiceEnd()
     print("[doubao-voice] VOICE OFF")
+    voiceOn = false
     unmuteCurrent()
     hs.timer.doAfter(SETTLE_DELAY, function()
         local cur = hs.keycodes.currentSourceID()
@@ -144,6 +150,19 @@ function M.stop()
         task:terminate()
         task = nil
     end
+end
+
+-- 以下查询接口供鼠标长按语音（modules/mouse_voice.lua）判断触发是否生效
+function M.isVoiceOn()
+    return voiceOn
+end
+
+function M.lastVoiceOnTimestamp()
+    return lastVoiceOnAt
+end
+
+function M.isWatcherRunning()
+    return task ~= nil
 end
 
 return M
