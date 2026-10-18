@@ -66,16 +66,23 @@ local function unmuteCurrent()
             fb:setMuted(fallbackPrevMuted)
         end
     else
-        local dev = hs.audiodevice.defaultOutputDevice()
+        -- 恢复当初 mute 的那台设备，而不是当前默认设备（期间默认设备可能已变化）
+        local dev = origDevice or hs.audiodevice.defaultOutputDevice()
         if dev then
             dev:setMuted(prevMuted)
         end
+        origDevice = nil
         -- print("[doubao-voice] unmuted, restored=" .. tostring(prevMuted))
     end
 end
 
 local function onVoiceStart(info)
     -- print("[doubao-voice] VOICE ON " .. tostring(info or ""))
+    -- 去重：语音窗 resize / window number 变化时 watcher 会发重复 ON，
+    -- 重复 mute 会把 prevMuted 覆盖成 true，导致 OFF 时恢复成静音（一直没声）。
+    if voiceOn then
+        return
+    end
     voiceOn = true
     lastVoiceOnAt = hs.timer.secondsSinceEpoch()
     muteCurrent()
@@ -83,6 +90,7 @@ end
 
 local function onVoiceEnd()
     -- print("[doubao-voice] VOICE OFF")
+    -- 即使 voiceOn 为 false 也尝试恢复（覆盖重载时状态丢失、ON 期间 muted 的情况）
     voiceOn = false
     unmuteCurrent()
     hs.timer.doAfter(SETTLE_DELAY, function()

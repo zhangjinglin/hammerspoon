@@ -29,7 +29,7 @@ git clone git@github.com:zhangjinglin/hammerspoon.git ~/.hammerspoon
 
 | 模块 | 状态 | 功能 |
 | --- | --- | --- |
-| `mouse_gestures.lua` | 启用 | 右键鼠标手势：按住右键**上滑** = Backspace，**下滑** = Return；普通右键点击仍正常弹出菜单 |
+| `mouse_gestures.lua` | 启用 | 右键鼠标手势：按住右键**上滑** = 显示/隐藏键盘显示程序（Keyboard Viewer），**下滑** = Return；普通右键点击仍正常弹出菜单 |
 | `mouse_voice.lua` | 启用 | 左键长按语音：任意位置按住左键 0.5s → HID 点按豆包语音快捷键（右 Option）开始语音，松开左键再点按一次结束、文字上屏；拖拽/微信内不触发 |
 | `announcer.lua` | 启用 | 整点/半点语音报时（8:00–21:00，Tingting 中文语音），带全屏倒计时遮罩提醒起身 |
 | `shortcuts.lua` | 启用 | `F1` 区域截屏并复制到剪贴板 |
@@ -100,5 +100,14 @@ mv.status()    -- 当前状态 / 监控进程 / 豆包语音是否开启
 
 macOS 的右键菜单在 **mouseDown 时弹出**，因此手势模块在按下时即拦截事件阻止菜单，抬手后判断纵向位移：
 
-- 位移 > 50px：执行手势（合成 Backspace / Return 按键）
+- 位移 > 50px：执行手势（上滑 = 切换 Keyboard Viewer，下滑 = 合成 Return 按键）
 - 位移不足：合成一对右键事件，正常弹出上下文菜单
+
+### 上滑为什么不是直接按键
+
+macOS 26 已经移除了 `KeyboardViewer.app`，`open -b com.apple.KeyboardViewer` 会失败；键盘显示程序现在是 `TextInputMenuAgent` 提供的一个窗口，只能通过输入法菜单里那个状态项（菜单栏上的 ABC / 拼音）中的 `Show / Hide Keyboard Viewer` 切换。所以上滑用 `hs.axuielement` 找到该状态项并按下，再点菜单项：
+
+- 打开菜单用的是 `AXPress`，AX 等菜单真正显示出来大约要 1.5s，手势到生效会有这点延迟；
+- 改用合成鼠标点击可以快到 0.2s，但鼠标指针会被移到菜单栏（`setAbsolutePosition` 也拉不回来），所以没有采用。
+
+前提条件：系统设置里打开 **输入法菜单显示在菜单栏**（否则没有 `TextInputMenuAgent` 状态项），并且 Hammerspoon 有辅助功能权限。找不到时手势会在屏幕上提示“没找到输入法菜单里的 Keyboard Viewer”。

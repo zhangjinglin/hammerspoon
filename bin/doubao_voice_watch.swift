@@ -27,7 +27,8 @@ while true {
     Thread.sleep(forTimeInterval: 0.2)
     let cur = voiceWindows()
     if cur != prev {
-        let on = !cur.subtracting(prev).isEmpty
+        // 只在 空->非空 时发 ON（窗体 resize/number 变化不重复发，避免 Lua 侧重复 mute 覆盖 prevMuted）
+        let on = prev.isEmpty && !cur.isEmpty
         let off = cur.isEmpty && !prev.isEmpty
         if on { print("VOICE ON \(cur.sorted().joined(separator: ","))") }
         if off { print("VOICE OFF") }
