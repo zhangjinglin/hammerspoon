@@ -31,6 +31,7 @@ git clone git@github.com:zhangjinglin/hammerspoon.git ~/.hammerspoon
 | --- | --- | --- |
 | `mouse_gestures.lua` | 启用 | 右键鼠标手势：按住右键**上滑** = 显示/隐藏键盘显示程序（Keyboard Viewer），**下滑** = Return；普通右键点击仍正常弹出菜单 |
 | `mouse_voice.lua` | 启用 | 左键长按语音：任意位置按住左键 0.5s → HID 点按豆包语音快捷键（右 Option）开始语音，松开左键再点按一次结束、文字上屏；拖拽/微信内不触发 |
+| `keypad.lua` | 启用 | 菜单栏虚拟按键面板:点菜单栏图标弹出悬浮小面板,含退格 / 回车 / 空格三个按键,鼠标点击即向打开面板时最前面的应用合成按键 |
 | `announcer.lua` | 启用 | 整点/半点语音报时（8:00–21:00，Tingting 中文语音），带全屏倒计时遮罩提醒起身 |
 | `shortcuts.lua` | 启用 | `F1` 区域截屏并复制到剪贴板 |
 | `app_input.lua` | 注释 | 按应用自动切换输入法（已被语音结束切 ABC 覆盖，停用） |

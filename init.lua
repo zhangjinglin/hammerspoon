@@ -13,6 +13,7 @@ local audioSwitcher = require("modules.audio_switcher")
 local doubaoVoice = require("modules.doubao_voice")
 local mouseGestures = require("modules.mouse_gestures")
 local mouseVoice = require("modules.mouse_voice")
+local keypad = require("modules.keypad")
 
 
 audioSwitcher:start()
@@ -34,3 +35,6 @@ mouseGestures.init()
 
 -- 鼠标长按语音（左键长按 → 豆包语音输入）
 mouseVoice.init()
+
+-- 菜单栏虚拟按键面板(退格 / 回车 / 空格)
+keypad.init()
