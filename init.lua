@@ -11,8 +11,8 @@ local shortcuts = require("modules.shortcuts")
 local audioSwitcher = require("modules.audio_switcher")
 -- local input = require("modules.app_input") -- 停用：语音结束已切 ABC，应用切换切英文冗余
 local doubaoVoice = require("modules.doubao_voice")
-local mouseGestures = require("modules.mouse_gestures")
-local mouseVoice = require("modules.mouse_voice")
+-- local mouseGestures = require("modules.mouse_gestures") -- 停用:右键上滑/回车已被 keypad 面板取代
+-- local mouseVoice = require("modules.mouse_voice") -- 停用:改用 keypad 屏幕按键
 local keypad = require("modules.keypad")
 
 
@@ -31,10 +31,10 @@ shortcuts.init()
 doubaoVoice.start()
 
 -- 鼠标手势
-mouseGestures.init()
+-- mouseGestures.init() -- 停用:见上
 
 -- 鼠标长按语音（左键长按 → 豆包语音输入）
-mouseVoice.init()
+-- mouseVoice.init() -- 停用:改用 keypad 屏幕按键
 
--- 菜单栏虚拟按键面板(退格 / 回车 / 空格)
+-- 菜单栏虚拟按键面板(退格 / 回车 / 空格 / 豆包语音,可拖动)
 keypad.init()
