@@ -1,6 +1,6 @@
 -- modules/keypad.lua
--- 菜单栏虚拟按键面板:点菜单栏图标展开/收起,面板常驻屏幕,含 Backspace / Return / Space / 豆包语音 按键。
--- 按住顶部拖动条可拖动面板。Backspace / Return / Space 点击即向当前应用合成按键;
+-- 菜单栏虚拟按键面板:点菜单栏图标展开/收起,面板常驻屏幕,含 豆包语音 / Backspace / Return 按键。
+-- 按住顶部拖动条可拖动面板。Backspace / Return 点击即向当前应用合成按键;
 -- 豆包语音键点一下开始、再点一下结束(免按模式:各点按一次 voice 键)。
 -- 豆包走 HID 层(bin/hidtap),会话层合成豆包不认。(需要 Hammerspoon 辅助功能权限。)
 
@@ -8,10 +8,10 @@ local keypad = {}
 
 local config = require("modules.config")
 
--- 面板尺寸(点)
-local PANEL_W, PANEL_H = 264, 100
+-- 面板尺寸(点):扁条状,只留图标不要文字
+local PANEL_W, PANEL_H = 210, 56
 -- 顶部拖动条高度(点):按住这条区域可拖动面板
-local DRAG_HANDLE_H = 18
+local DRAG_HANDLE_H = 12
 -- 菜单栏高度兜底值(实际高度在 init 里按屏幕动态取)
 local MENUBAR_H_FALLBACK = 26
 -- JS 消息通道名:HTML 里用 window.webkit.messageHandlers.<name>.postMessage(...) 发消息
@@ -25,12 +25,11 @@ local VOICE_KEYCODE = (type(VOICE_KEY_NAME) == "number" and VOICE_KEY_NAME)
     or hs.keycodes.map[VOICE_KEY_NAME] or 61
 
 -- 按键:key 是 Hammerspoon 键名(toggle=true 表示"点击切换",每次点按一次);
--- glyph 是大图标,label 是下面小字
+-- glyph 是图标;label 只用作鼠标悬停提示,不再渲染成按钮里的文字(面板更扁)
 local KEYS = {
+    { key = "doubao", glyph = "🎤", label = "豆包", toggle = true },
     { key = "delete", glyph = "⌫", label = "Backspace" },
     { key = "return", glyph = "↩", label = "Return" },
-    { key = "space",  glyph = "␣", label = "Space" },
-    { key = "doubao", glyph = "🎤", label = "豆包", toggle = true },
 }
 
 -- 生成面板的 HTML
@@ -39,8 +38,8 @@ local function buildHtml()
     for _, k in ipairs(KEYS) do
         local attr = k.toggle and ('data-toggle="' .. k.key .. '"') or ('data-key="' .. k.key .. '"')
         cells[#cells + 1] = string.format(
-            '<button %s><b>%s</b><span>%s</span></button>',
-            attr, k.glyph, k.label
+            '<button %s title="%s"><b>%s</b></button>',
+            attr, k.label, k.glyph
         )
     end
 
@@ -51,13 +50,12 @@ local function buildHtml()
         'background:rgba(28,28,32,0.96);color:#fff;',
         'font:13px -apple-system,"Helvetica Neue",sans-serif;-webkit-user-select:none;}',
         '.bar{flex:0 0 ' .. DRAG_HANDLE_H .. 'px;display:flex;align-items:center;justify-content:center;',
-        'cursor:move;color:rgba(255,255,255,.4);font-size:11px;letter-spacing:3px;}',
+        'cursor:move;color:rgba(255,255,255,.4);font-size:9px;letter-spacing:3px;line-height:1;}',
         '.keys{flex:1;display:flex;gap:8px;padding:0 8px 8px;align-items:stretch;}',
-        'button{flex:1;border:0;border-radius:10px;background:#3a3a40;color:#fff;',
-        'display:flex;flex-direction:column;align-items:center;justify-content:center;',
-        'gap:3px;cursor:pointer;padding:0;}',
-        'button b{font-size:22px;font-weight:500;line-height:1;}',
-        'button span{font-size:10px;opacity:.6;}',
+        'button{flex:1;border:0;border-radius:8px;background:#3a3a40;color:#fff;',
+        'display:flex;align-items:center;justify-content:center;',
+        'cursor:pointer;padding:0;}',
+        'button b{font-size:20px;font-weight:500;line-height:1;}',
         'button:active{background:#0a84ff;}',
         '</style></head><body>',
         '<div class="bar">⋯⋯</div>',
