@@ -19,12 +19,17 @@ local function inputMenuBarItem()
     return (extras:attributeValue("AXChildren") or {})[1]
 end
 
+-- 菜单项标题随系统语言变化（英文 Keyboard Viewer / 中文 显示键盘显示程序）
+local function isKeyboardViewerTitle(title)
+    if type(title) ~= "string" then return false end
+    return title:find("Keyboard Viewer") ~= nil or title:find("键盘显示程序") ~= nil
+end
+
 local function keyboardViewerMenuItem(item)
     local menu = (item:attributeValue("AXChildren") or {})[1]
     if not menu then return nil end
     for _, mi in ipairs(menu:attributeValue("AXChildren") or {}) do
-        local title = mi:attributeValue("AXTitle")
-        if title and title:find("Keyboard Viewer") then return mi end
+        if isKeyboardViewerTitle(mi:attributeValue("AXTitle")) then return mi end
     end
     return nil
 end
@@ -35,8 +40,11 @@ function mouseGestures.toggleKeyboardViewer()
     if item then
         -- AX 打开这个状态项的菜单大概要 1.5s（等菜单真正显示出来），之后菜单项才拿得到
         item:performAction("AXPress")
-        hs.timer.usleep(150000)
-        target = keyboardViewerMenuItem(item)
+        for _ = 1, 10 do
+            hs.timer.usleep(150000)
+            target = keyboardViewerMenuItem(item)
+            if target then break end
+        end
         if target then target:performAction("AXPress") end
     end
     if target then
