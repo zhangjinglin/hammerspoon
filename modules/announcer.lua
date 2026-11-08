@@ -33,6 +33,60 @@ local function format_cn_time(hour, min)
 end
 
 
+-- 播报用异步 hs.task 调 say，不能用 hs.execute：
+-- hs.execute 会同步阻塞 Hammerspoon 主线程直到 say 退出。macOS 27 上 say 偶尔会
+-- 卡在 run loop 里不退出（实测 2026-11 有一次挂了 25 分钟），主线程就一直在读管道，
+-- 表现为整个 Hammerspoon 转风火轮、菜单栏图标点不动。
+local sayTask = nil
+local sayWatchdog = nil
+
+local function stopSay()
+    if sayWatchdog then
+        sayWatchdog:stop()
+        sayWatchdog = nil
+    end
+
+    if sayTask then
+        local t = sayTask
+        sayTask = nil
+        pcall(function() t:terminate() end)
+    end
+end
+
+local function speak(text)
+    stopSay()
+
+    local t
+
+    t = hs.task.new("/usr/bin/say", function()
+        -- 只有仍是当前任务时才清理，避免覆盖新一次播报的看门狗
+        if sayTask == t then
+            sayTask = nil
+        end
+
+        if sayWatchdog then
+            sayWatchdog:stop()
+            sayWatchdog = nil
+        end
+    end, nil, { "-v", "Tingting", text })
+
+    if not t then
+        print("[announcer] say 启动失败")
+        return
+    end
+
+    sayTask = t
+    t:start()
+
+    -- 看门狗：一句话正常几秒就结束，30 秒还没退出说明 say 挂了，直接掐掉
+    sayWatchdog = hs.timer.doAfter(30, function()
+        if sayTask == t then
+            print("[announcer] say 超过 30s 未退出，强制结束")
+            stopSay()
+        end
+    end)
+end
+
 local function clear_overlay()
     if countdownTimer then
         countdownTimer:stop()
@@ -250,6 +304,7 @@ end
 
 function announcer.init()
     clear_overlay()
+    stopSay() -- 重载时清掉上一次残留的 say
 
 
     if announcer.timer then
@@ -284,12 +339,7 @@ function announcer.init()
                         now.min
                     )
 
-                    hs.execute(
-                        string.format(
-                            "say -v Tingting '%s'",
-                            text
-                        )
-                    )
+                    speak(text)
                     show_overlay(
                         now.hour,
                         now.min
