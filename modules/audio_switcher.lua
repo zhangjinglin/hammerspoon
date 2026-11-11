@@ -56,14 +56,7 @@ local function switchAudio()
 
                 hs.alert.show("切换到27M3U")
             else
-                -- 没有27M3U -> 静音
-
-                local current = hs.audiodevice.defaultOutputDevice()
-
-                if current then
-                    current:setVolume(0)
-                end
-
+                -- 没有27M3U -> 不再强行动音量（旧逻辑会把当前设备压到 0，可能误静 HDMI/功放）
                 hs.alert.show("没有可用输出设备")
             end
         end

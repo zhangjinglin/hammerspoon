@@ -17,17 +17,56 @@ local taskBuf = ""
 local voiceOn = false
 local lastVoiceOnAt = 0
 local prevMuted = false
-local origDevice = nil
+-- 记 UID/名字而不是设备对象：显示器关闭重开后 HDMI 音频会重新枚举（UID 可能变化），
+-- 旧对象会失效，恢复时必须重新查找
+local origDeviceUID = nil
+local origDeviceName = nil
 local switchedToFallback = false
 local fallbackPrevMuted = false
 local fallbackPrevVolume = nil
+
+-- 恢复默认输出的重试参数：显示器刚唤醒时设备可能还没注册完
+local RESTORE_RETRY_DELAY = 0.5
+local RESTORE_RETRY_MAX = 3
+
+local function findOriginalDevice()
+    if origDeviceUID then
+        local dev = hs.audiodevice.findOutputByUID(origDeviceUID)
+        if dev then
+            return dev
+        end
+    end
+    -- 重枚举后 UID 可能变了，按名字兜底
+    if origDeviceName and origDeviceName ~= "" then
+        return hs.audiodevice.findOutputByName(origDeviceName)
+    end
+    return nil
+end
+
+-- 延迟重试切回默认输出；多次失败说明设备已不在（如显示器拔了），保持现状并记录
+local function retryRestoreDefault(uid, name, attempt)
+    hs.timer.doAfter(RESTORE_RETRY_DELAY, function()
+        local dev = (uid and hs.audiodevice.findOutputByUID(uid))
+            or (name and name ~= "" and hs.audiodevice.findOutputByName(name))
+            or nil
+        if dev then
+            dev:setDefaultOutputDevice()
+        elseif attempt < RESTORE_RETRY_MAX then
+            retryRestoreDefault(uid, name, attempt + 1)
+        else
+            print(string.format("[doubao-voice] original output gone (uid=%s name=%s), keep current default",
+                tostring(uid), tostring(name)))
+        end
+    end)
+end
 
 local function muteCurrent()
     local dev = hs.audiodevice.defaultOutputDevice()
     if not dev then
         return false
     end
-    origDevice = dev
+    origDeviceUID = dev:uid()
+    origDeviceName = dev:name()
     prevMuted = dev:muted() or false
     dev:setMuted(true)
     if dev:muted() then
@@ -53,10 +92,16 @@ end
 local function unmuteCurrent()
     if switchedToFallback then
         switchedToFallback = false
-        if origDevice then
-            origDevice:setDefaultOutputDevice()
-            -- print("[doubao-voice] switched back to " .. tostring(origDevice:name()))
-            origDevice = nil
+        if origDeviceUID or origDeviceName then
+            local dev = findOriginalDevice()
+            if dev then
+                dev:setDefaultOutputDevice()
+            else
+                -- 设备还没枚举回来（显示器刚打开），延迟重试
+                retryRestoreDefault(origDeviceUID, origDeviceName, 1)
+            end
+            origDeviceUID = nil
+            origDeviceName = nil
         end
         local fb = hs.audiodevice.findOutputByName(FALLBACK_OUTPUT)
         if fb then
@@ -67,12 +112,13 @@ local function unmuteCurrent()
         end
     else
         -- 恢复当初 mute 的那台设备，而不是当前默认设备（期间默认设备可能已变化）
-        local dev = origDevice or hs.audiodevice.defaultOutputDevice()
+        -- 有记录但设备已消失（重枚举中）：跳过，新注册的设备静音状态本来就是初始值
+        local dev = findOriginalDevice() or (not origDeviceUID and not origDeviceName and hs.audiodevice.defaultOutputDevice()) or nil
         if dev then
             dev:setMuted(prevMuted)
         end
-        origDevice = nil
-        -- print("[doubao-voice] unmuted, restored=" .. tostring(prevMuted))
+        origDeviceUID = nil
+        origDeviceName = nil
     end
 end
 
