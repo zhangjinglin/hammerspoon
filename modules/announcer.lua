@@ -58,6 +58,8 @@ local function speak(text)
 
     local t
 
+    -- 注意：Hammerspoon 1.1.x 的 hs.task.new 第 3 个参数必须是 table 或 function，
+    -- 显式传 nil 会报 "incorrect type 'nil' for argument 3"，这里传一个空回调
     t = hs.task.new("/usr/bin/say", function()
         -- 只有仍是当前任务时才清理，避免覆盖新一次播报的看门狗
         if sayTask == t then
@@ -68,7 +70,9 @@ local function speak(text)
             sayWatchdog:stop()
             sayWatchdog = nil
         end
-    end, nil, { "-v", "Tingting", text })
+    end, function()
+        return true
+    end, { "-v", "Tingting", text })
 
     if not t then
         print("[announcer] say 启动失败")
