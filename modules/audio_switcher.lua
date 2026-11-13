@@ -4,24 +4,65 @@ local AMP_NAME           = "External Headphones" -- 外置功放
 local MONITOR_NAME       = "27M3U"
 local PROJECTOR_NAME     = "JMGO"
 
-local lastProjectorState = nil
+local lastDisplayState   = nil -- "projector" | "monitor" | "all_off"
 local settleTimer        = nil
+local screensAsleep      = false
 
-local function projectorOnline()
+local function screenOnline(name)
     for _, screen in ipairs(hs.screen.allScreens()) do
-        if screen:name() == PROJECTOR_NAME then
+        local sname = screen:name() or ""
+        if sname == name or string.find(sname, name, 1, true) ~= nil then
             return true
         end
     end
     return false
 end
 
--- 当前期望的默认输出设备：投影仪开着用功放，否则用显示器
-local function desiredDeviceName()
-    if projectorOnline() then
-        return AMP_NAME
+local function projectorOnline()
+    return screenOnline(PROJECTOR_NAME)
+end
+
+local function monitorOnline()
+    return screenOnline(MONITOR_NAME)
+end
+
+-- 供外部模块（如 announcer.lua）查询当前屏幕是否处于活跃可用状态
+function M.isDisplayActive()
+    if screensAsleep then
+        return false
     end
-    return MONITOR_NAME
+    return projectorOnline() or monitorOnline()
+end
+
+-- 获取当前显示设备状态
+local function currentDisplayState()
+    if screensAsleep then
+        return "all_off"
+    end
+    if projectorOnline() then
+        return "projector"
+    elseif monitorOnline() then
+        return "monitor"
+    else
+        return "all_off"
+    end
+end
+
+-- 当显示器和投影机都关闭时，执行静音保护
+local function muteAllAudio()
+    -- 静音外置功放
+    local amp = hs.audiodevice.findOutputByName(AMP_NAME)
+    if amp and amp:muted() == false then
+        amp:setMuted(true)
+    end
+
+    -- 静音当前默认设备（若支持）
+    local cur = hs.audiodevice.defaultOutputDevice()
+    if cur and cur:muted() == false then
+        cur:setMuted(true)
+    end
+
+    print("[audio_switcher] 显示器与投影机均已关闭，已静音音频输出")
 end
 
 -- 安全地设置指定设备为默认输出
@@ -44,10 +85,17 @@ local function applyDefault(name, showAlert)
         dev:setMuted(false)
     end
 
-    -- 只有外置功放（且支持音量调节）时才把音量设为 100
-    -- 27M3U 等 HDMI 设备不支持软件音量调节，绝不能调用 setVolume
-    if name == AMP_NAME and dev:volume() ~= nil then
-        dev:setVolume(100)
+    if name == AMP_NAME then
+        -- 投影仪模式：外置功放（且支持音量调节）时音量设为 100
+        if dev:volume() ~= nil then
+            dev:setVolume(100)
+        end
+    elseif name == MONITOR_NAME then
+        -- 显示器模式：顺便将外置功放静音，避免闲置发声或杂音
+        local amp = hs.audiodevice.findOutputByName(AMP_NAME)
+        if amp and amp:muted() == false then
+            amp:setMuted(true)
+        end
     end
 
     if showAlert and not alreadyDefault then
@@ -66,16 +114,20 @@ local function scheduleSwitch(delay, showAlert)
     settleTimer = hs.timer.doAfter(delay or 1.5, function()
         settleTimer = nil
 
-        local online = projectorOnline()
-        local stateChanged = (online ~= lastProjectorState)
-        lastProjectorState = online
+        local state = currentDisplayState()
+        local stateChanged = (state ~= lastDisplayState)
+        lastDisplayState = state
 
-        local target = desiredDeviceName()
-        local success = applyDefault(target, showAlert or stateChanged)
-
-        if not success and target == MONITOR_NAME then
-            -- 27M3U 尚未就绪，不强行动音量，保持现状
-            print("[audio_switcher] 未找到期望设备: " .. target)
+        if state == "all_off" then
+            muteAllAudio()
+        elseif state == "projector" then
+            applyDefault(AMP_NAME, showAlert or stateChanged)
+        elseif state == "monitor" then
+            local success = applyDefault(MONITOR_NAME, showAlert or stateChanged)
+            if not success then
+                -- 27M3U 尚未就绪，不强行动音量，保持现状
+                print("[audio_switcher] 未找到期望设备: " .. MONITOR_NAME)
+            end
         end
     end)
 end
@@ -92,19 +144,25 @@ hs.audiodevice.watcher.setCallback(function(event)
     end
 end)
 
--- 3. 系统唤醒监听：休眠唤醒时重新校验
-local wakeWatcher = hs.caffeinate.watcher.new(function(eventType)
-    if eventType == hs.caffeinate.watcher.screensDidWake
+-- 3. 系统/屏幕休眠与唤醒监听
+local caffeinateWatcher = hs.caffeinate.watcher.new(function(eventType)
+    if eventType == hs.caffeinate.watcher.screensDidSleep
+        or eventType == hs.caffeinate.watcher.systemWillSleep then
+        screensAsleep = true
+        scheduleSwitch(0.5, false)
+    elseif eventType == hs.caffeinate.watcher.screensDidWake
         or eventType == hs.caffeinate.watcher.systemDidWake then
+        screensAsleep = false
         scheduleSwitch(2.0, false)
     end
 end)
 
 function M:start()
-    lastProjectorState = projectorOnline()
+    screensAsleep = false
+    lastDisplayState = currentDisplayState()
     screenWatcher:start()
     hs.audiodevice.watcher.start()
-    wakeWatcher:start()
+    caffeinateWatcher:start()
 
     -- 启动后延迟 1 秒安全纠正一次
     scheduleSwitch(1.0, false)
@@ -118,7 +176,7 @@ function M:stop()
     end
     screenWatcher:stop()
     hs.audiodevice.watcher.stop()
-    wakeWatcher:stop()
+    caffeinateWatcher:stop()
 end
 
 return M

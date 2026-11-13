@@ -7,6 +7,31 @@ local countdownTimer = nil
 local escEventTap = nil
 local lastTriggeredKey = nil
 
+-- 判断当前是否有活跃的显示设备（显示器或投影仪）
+local function isScreenActive()
+    local ok, audioSwitcher = pcall(require, "modules.audio_switcher")
+    if ok and audioSwitcher and type(audioSwitcher.isDisplayActive) == "function" then
+        return audioSwitcher.isDisplayActive()
+    end
+
+    for _, screen in ipairs(hs.screen.allScreens()) do
+        local name = screen:name() or ""
+        if name == "27M3U" or name == "JMGO" or string.find(name, "27M3U", 1, true) or string.find(name, "JMGO", 1, true) then
+            return true
+        end
+    end
+    return false
+end
+
+-- 判断当前音频是否处于静音状态
+local function isAudioMuted()
+    local dev = hs.audiodevice.defaultOutputDevice()
+    if dev and dev:muted() == true then
+        return true
+    end
+    return false
+end
+
 
 -- 中文时间格式
 local function format_cn_time(hour, min)
@@ -337,6 +362,10 @@ function announcer.init()
                     and lastTriggeredKey ~= triggerKey then
                     lastTriggeredKey = triggerKey
 
+                    -- 当显示器和投影机都关闭，或当前已静音时，跳过播报与倒计时弹窗
+                    if not isScreenActive() or isAudioMuted() then
+                        return
+                    end
 
                     local text = format_cn_time(
                         now.hour,
