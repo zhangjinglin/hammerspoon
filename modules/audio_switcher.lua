@@ -6,15 +6,26 @@ local PROJECTOR_NAME     = "JMGO"
 local KICK_BIN           = os.getenv("HOME") .. "/.hammerspoon/bin/hdmi_audio_kick"
 
 local lastDisplayState   = nil -- "projector" | "monitor" | "all_off"
+local lastDisplayAudioSig = ""
 local settleTimer        = nil
 local retryTimer         = nil
+local repairTimer        = nil
+local repairTask         = nil
+local repairInFlight     = false
+local pendingRepair      = nil -- { name = string, callback = function|nil }
+local stopped            = false
 local screensAsleep      = false
 local wakeGracePeriod    = false  -- 唤醒保护期：防止 screen/audiodevice 事件覆盖 wake 定时器
-local mutedDeviceUIDs    = {}     -- 记录被 muteAllAudio 静音的设备 UID，唤醒时定向解除
+local mutedDeviceUIDs    = {}     -- UID -> true，仅记录本模块静音的设备
 
 local MAX_RETRIES        = 5
 local RETRY_INTERVAL     = 2      -- 秒
 local WAKE_SETTLE_DELAY  = 3.5    -- HDMI ARC 握手通常需要 3-5 秒
+local REPAIR_DELAY       = 0.8    -- 默认输出切换后等待硬件稳定的时间
+
+local function isDisplayAudioName(name)
+    return name == MONITOR_NAME or name == PROJECTOR_NAME
+end
 
 local function screenOnline(name)
     for _, screen in ipairs(hs.screen.allScreens()) do
@@ -32,6 +43,32 @@ end
 
 local function monitorOnline()
     return screenOnline(MONITOR_NAME)
+end
+
+-- 显示音频设备当前存在情况（用于过滤无关的 USB/蓝牙设备增删事件）
+local function displayAudioSignature()
+    local names = {}
+    for _, dev in ipairs(hs.audiodevice.allOutputDevices() or {}) do
+        local devName = dev:name()
+        if isDisplayAudioName(devName) then
+            names[#names + 1] = devName
+        end
+    end
+    table.sort(names)
+    return table.concat(names, "|")
+end
+
+-- 当前默认输出，仅当它是显示音频设备时返回名字
+local function currentDisplayAudioDefaultName()
+    local dev = hs.audiodevice.defaultOutputDevice()
+    if not dev then
+        return nil
+    end
+    local devName = dev:name()
+    if isDisplayAudioName(devName) then
+        return devName
+    end
+    return nil
 end
 
 -- 供外部模块（如 announcer.lua）查询当前屏幕是否处于活跃可用状态
@@ -56,79 +93,129 @@ local function currentDisplayState()
     end
 end
 
--- 当显示器和投影机都关闭时，执行静音保护（记录被静音的设备 UID）
-local function muteAllAudio()
-    mutedDeviceUIDs = {}
-
-    -- 静音外置功放
-    local amp = hs.audiodevice.findOutputByName(AMP_NAME)
-    if amp and amp:muted() == false then
-        amp:setMuted(true)
-        table.insert(mutedDeviceUIDs, amp:uid())
+local function muteDevice(dev)
+    if not dev then
+        return
     end
+    if dev:muted() == false then
+        dev:setMuted(true)
+        if dev:muted() == true then
+            mutedDeviceUIDs[dev:uid()] = true
+        end
+    end
+end
 
-    -- 静音当前默认设备（若为可静音设备，绝不静音 HDMI 显示器）
+-- 当显示器和投影机都关闭时，执行静音保护。
+-- 注意：不清空已有记录，否则息屏期间重复触发会丢失之前静音的设备，唤醒后无法恢复。
+local function muteAllAudio()
+    muteDevice(hs.audiodevice.findOutputByName(AMP_NAME))
+
     local cur = hs.audiodevice.defaultOutputDevice()
-    if cur and cur:name() ~= MONITOR_NAME and cur:muted() == false then
-        cur:setMuted(true)
-        table.insert(mutedDeviceUIDs, cur:uid())
+    if cur and not isDisplayAudioName(cur:name()) then
+        muteDevice(cur)
     end
 
     print("[audio_switcher] 显示器与投影机均已关闭，已静音音频输出")
 end
 
--- 唤醒时，解除所有之前被 muteAllAudio 静音的设备（按 UID 定向解除）
+-- 解除本模块之前静音的设备（按 UID 定向解除）
 local function unmutePreviouslyMuted()
-    if #mutedDeviceUIDs == 0 then
+    if next(mutedDeviceUIDs) == nil then
         return
     end
 
-    local devices = hs.audiodevice.allOutputDevices() or {}
-    for _, dev in ipairs(devices) do
+    for _, dev in ipairs(hs.audiodevice.allOutputDevices() or {}) do
         local uid = dev:uid()
-        for _, mutedUID in ipairs(mutedDeviceUIDs) do
-            if uid == mutedUID and dev:muted() == true then
+        if uid and mutedDeviceUIDs[uid] then
+            if dev:muted() == true then
                 dev:setMuted(false)
                 print("[audio_switcher] 解除之前静音的设备: " .. (dev:name() or uid))
             end
+            mutedDeviceUIDs[uid] = nil
         end
     end
-
-    mutedDeviceUIDs = {}
 end
 
--- 核心修复：通过重置采样率强制唤醒/复位 HDMI 音频硬件 DMA 与 ACR 时钟
-local function kickHDMIAudio(name, callback)
+local function logToolOutput(prefix, text)
+    if not text or text == "" then
+        return
+    end
+    for line in tostring(text):gmatch("[^\r\n]+") do
+        print(prefix .. line)
+    end
+end
+
+-- 调用探测/修复工具：健康则直接返回，卡死才瞬切采样率并复测。
+-- 工具不修改默认输出，路由仍由本模块决定。
+local function runRepair(name, callback)
+    if stopped then
+        return
+    end
+    if repairInFlight then
+        pendingRepair = { name = name, callback = callback }
+        return
+    end
     if not hs.fs.attributes(KICK_BIN) then
-        print("[audio_switcher] 警告: 未找到 hdmi_audio_kick 工具: " .. KICK_BIN)
-        if callback then callback(false) end
+        print("[audio_switcher] 警告: 未找到显示音频工具: " .. KICK_BIN)
+        if callback then
+            callback(false, "missing")
+        end
         return
     end
 
-    hs.task.new(KICK_BIN, function(exitCode, stdOut, stdErr)
+    repairInFlight = true
+    repairTask = hs.task.new(KICK_BIN, function(exitCode, stdOut, stdErr)
+        repairTask = nil
+        repairInFlight = false
+        if stopped then
+            return
+        end
+
         if exitCode == 0 then
-            print("[audio_switcher] ✅ HDMI 音频硬件时钟重置成功: " .. tostring(name))
-            if callback then callback(true) end
+            if stdOut and stdOut:find("repaired", 1, true) then
+                print("[audio_switcher] 已修复显示音频: " .. tostring(name))
+            end
         else
-            print(string.format("[audio_switcher] ⚠️ HDMI 音频重置返回码 %d: %s",
-                exitCode, tostring(stdErr or stdOut)))
-            if callback then callback(false) end
+            logToolOutput("[audio_switcher] ", stdOut)
+            logToolOutput("[audio_switcher] ", stdErr)
+            print(string.format("[audio_switcher] %s 的显示音频检测/修复返回 %s",
+                tostring(name), tostring(exitCode)))
+        end
+
+        if callback then
+            callback(exitCode == 0, exitCode)
+        end
+
+        local queued = pendingRepair
+        pendingRepair = nil
+        if queued then
+            runRepair(queued.name, queued.callback)
         end
     end, { name }):start()
 end
 
--- 暴露给外部或手动触发
-function M.kickAudio()
-    kickHDMIAudio(MONITOR_NAME, function(success)
-        if success then
-            hs.alert.show("HDMI 音频已唤醒 🔊", 1.5)
-        else
-            hs.alert.show("HDMI 音频唤醒失败 ⚠️", 1.5)
+-- 默认输出就绪后，只修复“当前默认”的显示音频设备。
+-- 投影仪模式下默认输出是功放，因此不会碰 JMGO；手动选 JMGO 时由 dOut 事件触发。
+local function scheduleDefaultRepair(delay)
+    if stopped then
+        return
+    end
+    if repairTimer then
+        repairTimer:stop()
+    end
+    repairTimer = hs.timer.doAfter(delay or REPAIR_DELAY, function()
+        repairTimer = nil
+        if stopped or screensAsleep then
+            return
+        end
+        local name = currentDisplayAudioDefaultName()
+        if name then
+            runRepair(name)
         end
     end)
 end
 
--- 安全地设置指定设备为默认输出（带重试机制与 HDMI 激活）
+-- 安全地设置指定设备为默认输出（带重试机制）
 local function applyDefault(name, showAlert, retryCount)
     local dev = hs.audiodevice.findOutputByName(name)
     if not dev then
@@ -153,46 +240,37 @@ local function applyDefault(name, showAlert, retryCount)
     local cur = hs.audiodevice.defaultOutputDevice()
     local alreadyDefault = cur and (cur:uid() == dev:uid())
 
-    if name == MONITOR_NAME then
-        -- 核心痛点解决：即使已经是默认设备，关闭显示器再开后 HDMI 音频通道在硬件驱动层也会冻结！
-        -- 必须调用 hdmi_audio_kick 触发采样率切换重构 ACR 时钟，才能让音频流正常输出。
-        kickHDMIAudio(MONITOR_NAME, function()
-            -- 确保默认输出指向 27M3U
-            dev:setDefaultOutputDevice()
+    if not alreadyDefault then
+        dev:setDefaultOutputDevice()
+    end
 
-            -- 若设备标记为静音，解除静音
-            if dev:muted() == true then
-                dev:setMuted(false)
-            end
+    if dev:muted() == true then
+        dev:setMuted(false)
+    end
 
-            -- 显示器模式：顺便将外置功放静音，避免闲置发声或杂音
-            local amp = hs.audiodevice.findOutputByName(AMP_NAME)
-            if amp and amp:muted() == false then
-                amp:setMuted(true)
-            end
-
-            -- 解除休眠期间对其他设备记录的静音保护
-            unmutePreviouslyMuted()
-        end)
-    else
-        -- 投影仪/外置功放模式
-        if not alreadyDefault then
-            dev:setDefaultOutputDevice()
-        end
-
-        if dev:muted() == true then
-            dev:setMuted(false)
-        end
-
+    if name == AMP_NAME then
+        -- 投影仪模式：外置功放（且支持音量调节）时音量设为 100
         if dev:volume() ~= nil then
             dev:setVolume(100)
         end
-
-        unmutePreviouslyMuted()
+    elseif name == MONITOR_NAME then
+        -- 显示器模式：顺便将外置功放静音，避免闲置发声或杂音
+        local amp = hs.audiodevice.findOutputByName(AMP_NAME)
+        if amp and amp:muted() == false then
+            amp:setMuted(true)
+        end
     end
+
+    -- 解除休眠期间对其他设备记录的静音保护
+    unmutePreviouslyMuted()
 
     if showAlert and not alreadyDefault then
         hs.alert.show("音频输出: " .. name)
+    end
+
+    -- 找到设备（含重试成功）后再决定是否修复
+    if name == MONITOR_NAME then
+        scheduleDefaultRepair(REPAIR_DELAY)
     end
 
     return true
@@ -227,13 +305,22 @@ scheduleSwitch = function(delay, showAlert, source)
         local stateChanged = (state ~= lastDisplayState)
         lastDisplayState = state
 
+        -- 只在状态变化、唤醒或启动时强制路由；普通设备事件不覆盖手动选择
+        local shouldRoute = stateChanged or source == "wake" or source == "init"
+
         if state == "all_off" then
             muteAllAudio()
-        elseif state == "projector" then
-            applyDefault(AMP_NAME, showAlert or stateChanged)
-        elseif state == "monitor" then
-            -- applyDefault 自带重试，找不到设备会自动每 2 秒重试最多 5 次，并在就绪后激活 HDMI 时钟
-            applyDefault(MONITOR_NAME, showAlert or stateChanged)
+        else
+            if shouldRoute then
+                if state == "projector" then
+                    applyDefault(AMP_NAME, showAlert or stateChanged)
+                else
+                    applyDefault(MONITOR_NAME, showAlert or stateChanged)
+                end
+            end
+
+            -- 当前默认若是显示音频，就探测一次；健康时不改任何设置
+            scheduleDefaultRepair(REPAIR_DELAY)
         end
     end)
 end
@@ -243,10 +330,17 @@ local screenWatcher = hs.screen.watcher.new(function()
     scheduleSwitch(1.5, false, "screen")
 end)
 
--- 2. 音频设备监听：HDMI 音频端点上线/注销
+-- 2. 音频设备监听：只在显示音频端点变化时重新路由；默认输出变化时只做修复，不改路由
 hs.audiodevice.watcher.setCallback(function(event)
     if event == "dev#" then
-        scheduleSwitch(1.5, false, "audiodevice")
+        local signature = displayAudioSignature()
+        if signature ~= lastDisplayAudioSig then
+            lastDisplayAudioSig = signature
+            scheduleSwitch(1.5, false, "audiodevice")
+        end
+    elseif event == "dOut" then
+        -- 用户手动选中 JMGO/27M3U 时，探测并修复它，但保持用户的选择
+        scheduleDefaultRepair(0.5)
     end
 end)
 
@@ -265,11 +359,27 @@ local caffeinateWatcher = hs.caffeinate.watcher.new(function(eventType)
     end
 end)
 
+-- 手动触发：修复当前默认的显示音频；没有则检查显示器
+function M.kickAudio()
+    local name = currentDisplayAudioDefaultName() or MONITOR_NAME
+    runRepair(name, function(success, code)
+        if success then
+            hs.alert.show("显示音频正常/已修复: " .. name, 1.5)
+        elseif code == 1 then
+            hs.alert.show("显示音频仍卡死: " .. name, 1.5)
+        else
+            hs.alert.show("无法检测显示音频: " .. name, 1.5)
+        end
+    end)
+end
+
 function M:start()
+    stopped = false
     screensAsleep = false
     wakeGracePeriod = false
     mutedDeviceUIDs = {}
     lastDisplayState = currentDisplayState()
+    lastDisplayAudioSig = displayAudioSignature()
     screenWatcher:start()
     hs.audiodevice.watcher.start()
     caffeinateWatcher:start()
@@ -280,6 +390,7 @@ function M:start()
 end
 
 function M:stop()
+    stopped = true
     if settleTimer then
         settleTimer:stop()
         settleTimer = nil
@@ -288,6 +399,16 @@ function M:stop()
         retryTimer:stop()
         retryTimer = nil
     end
+    if repairTimer then
+        repairTimer:stop()
+        repairTimer = nil
+    end
+    if repairTask then
+        repairTask:terminate()
+        repairTask = nil
+    end
+    repairInFlight = false
+    pendingRepair = nil
     wakeGracePeriod = false
     mutedDeviceUIDs = {}
     screenWatcher:stop()
