@@ -1,6 +1,6 @@
 -- modules/keypad.lua
--- 菜单栏虚拟按键面板:点菜单栏图标展开/收起,面板常驻屏幕,含 豆包语音 / Backspace / Return / 屏幕键盘 按键。
--- 按住顶部拖动条可拖动面板。Backspace / Return 点击即向当前应用合成按键;
+-- 菜单栏虚拟按键面板:点菜单栏图标展开/收起,面板常驻屏幕,含 豆包语音 / Backspace / Return / 空格 / 截屏 / 屏幕键盘 按键。
+-- 按住顶部拖动条可拖动面板。Backspace / Return / 空格 点击即向当前应用合成按键; 截屏 点击执行屏幕截图;
 -- 豆包语音键点一下开始、再点一下结束(免按模式:各点按一次 voice 键)。
 -- 豆包走 HID 层(bin/hidtap),会话层合成豆包不认。(需要 Hammerspoon 辅助功能权限。)
 
@@ -11,6 +11,8 @@ local config = require("modules.config")
 -- 屏幕键盘(Keyboard Viewer)开关:复用 mouse_gestures 里的实现
 -- (macOS 26 已无 KeyboardViewer.app,只能点输入法菜单里的那个菜单项)
 local mouseGestures = require("modules.mouse_gestures")
+-- 屏幕截图:复用 shortcuts 里 F1 绑的那个动作
+local shortcuts = require("modules.shortcuts")
 
 -- 面板尺寸(点):扁条状,只留图标不要文字
 local PANEL_W, PANEL_H = 210, 56
@@ -34,6 +36,8 @@ local KEYS = {
     { key = "doubao", glyph = "🎤", label = "豆包", toggle = true },
     { key = "delete", glyph = "⌫", label = "Backspace" },
     { key = "return", glyph = "↩", label = "Return" },
+    { key = "space", glyph = "␣", label = "空格" },
+    { action = "capture", glyph = "📸", label = "截屏" },
     { action = "keyboardviewer", glyph = "⌨", label = "屏幕键盘" },
 }
 
@@ -183,6 +187,9 @@ function keypad.init()
         if body.toggle then
             keypad.doubaoToggle()
             keypad.refocus()
+        elseif body.action == "capture" then
+            -- 截屏:复用 shortcuts 里 F1 绑的动作(区域截屏并存剪贴板)
+            shortcuts.capture()
         elseif body.action == "keyboardviewer" then
             -- 显示 / 隐藏系统屏幕键盘(Keyboard Viewer)
             mouseGestures.toggleKeyboardViewer()
